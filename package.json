@@ -11,7 +11,7 @@
   "bin": "dist/cli.js",
   "main": "dist/cli.js",
   "scripts": {
-    "build": "tsc --project ./tsconfig.json && cp ./app/data/*.sql ./dist/data/",
+    "build": "tsc --project ./tsconfig.json && tsc-alias -p ./tsconfig.json && cp ./app/data/*.sql ./dist/data/",
     "test": "node --test"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@node-loader/import-maps": "^1.1.0",
+    "tsc-alias": "^1.6.0",
     "@types/node": "^24.3.0",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
