@@ -15,20 +15,20 @@ const databaseAuthTokenEnv = env.DATABASE_AUTH_TOKEN;
 const databaseAuthToken = databaseAuthTokenArg ?? databaseAuthTokenEnv ?? undefined;
 
 async function interpretDatabaseUrl(url?: string, authToken?: string): Promise<AccountingRepository> {
-  if (url.startsWith('sqlite:')) {
+  if (url?.startsWith('sqlite:')) {
     const { SqliteAccountingRepository } = await import('@app/data/sqlite-accounting-repository.js');
     const trimmedPath = url.slice('sqlite:'.length);
     const repo = new SqliteAccountingRepository(trimmedPath);
     return repo;
   }
-  else if (url.startsWith('libsql:')) {
+  else if (url?.startsWith('libsql:')) {
     const { LibsqlAccountingRepository } = await import('@app/data/libsql-accounting-repository.js');
     const repo = new LibsqlAccountingRepository(url, authToken);
     return repo;
   }
-  else if (url === 'memory:' || url === undefined) {
+  else if (url === ':memory:' || url === undefined) {
     const { SqliteAccountingRepository } = await import('@app/data/sqlite-accounting-repository.js');
-    const repo = new SqliteAccountingRepository(url);
+    const repo = new SqliteAccountingRepository(url ?? ':memory:');
     return repo;
   }
   else {
