@@ -1,7 +1,7 @@
 import { ok } from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, suite } from 'node:test';
 
-import { createAccountingMcpServer } from '@app/accounting-mcp-server.js';
+import { createAccountingMcpServer } from '@app/mcp-server/mcp-server.js';
 import { SqliteAccountingRepository } from '@app/data/sqlite-accounting-repository.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
