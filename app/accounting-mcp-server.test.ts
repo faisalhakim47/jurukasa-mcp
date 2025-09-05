@@ -567,4 +567,116 @@ suite('AccountingMcpServer', function () {
       ok(responseText.includes('Test entry for SQL query'), 'should contain journal entry description');
     });
   });
+
+  describe('Tool: delete_many_journal_entry_drafts', function () {
+    it('deletes multiple draft journal entries', async function () {
+      // Create multiple drafts
+      const draft1 = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Draft 1',
+          lines: [
+            { accountCode: 100, amount: 100, type: 'debit' },
+            { accountCode: 200, amount: 100, type: 'credit' },
+          ],
+        },
+      });
+
+      const draft2 = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-02',
+          description: 'Draft 2',
+          lines: [
+            { accountCode: 100, amount: 200, type: 'debit' },
+            { accountCode: 200, amount: 200, type: 'credit' },
+          ],
+        },
+      });
+
+      // Extract refs
+      const draft1Text = (draft1.content[0] as { text: string }).text;
+      const draft2Text = (draft2.content[0] as { text: string }).text;
+      const ref1Match = draft1Text.match(/reference (\d+)/);
+      const ref2Match = draft2Text.match(/reference (\d+)/);
+      assertDefined(ref1Match, 'Should extract journal entry reference 1');
+      assertDefined(ref2Match, 'Should extract journal entry reference 2');
+      const ref1 = parseInt(ref1Match[1]);
+      const ref2 = parseInt(ref2Match[1]);
+
+      // Delete the drafts
+      const deleteRes = await client.callTool({
+        name: 'delete_many_journal_entry_drafts',
+        arguments: {
+          journalEntryRefs: [ref1, ref2],
+        },
+      });
+      assertPropDefined(deleteRes, 'content');
+      assertArray(deleteRes.content);
+      ok(deleteRes.content.length > 0, 'tool should return content');
+      const deleteText = (deleteRes.content[0] as { text: string }).text;
+      ok(deleteText.includes(`Draft journal entry ${ref1} deleted`), 'should confirm deletion of first draft');
+      ok(deleteText.includes(`Draft journal entry ${ref2} deleted`), 'should confirm deletion of second draft');
+    });
+
+    it('handles empty list', async function () {
+      const res = await client.callTool({
+        name: 'delete_many_journal_entry_drafts',
+        arguments: {
+          journalEntryRefs: [],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('No journal entry references provided'), 'should handle empty list');
+    });
+  });
+
+  describe('Tool: reverse_journal_entry', function () {
+    it('reverses a posted journal entry', async function () {
+      // Create and post a journal entry
+      const draftRes = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Entry to reverse',
+          lines: [
+            { accountCode: 100, amount: 300, type: 'debit' },
+            { accountCode: 200, amount: 300, type: 'credit' },
+          ],
+        },
+      });
+
+      // Extract ref
+      const draftText = (draftRes.content[0] as { text: string }).text;
+      const refMatch = draftText.match(/reference (\d+)/);
+      assertDefined(refMatch, 'Should extract journal entry reference');
+      const originalRef = parseInt(refMatch[1]);
+
+      // Post the entry
+      await client.callTool({
+        name: 'post_journal_entry',
+        arguments: { journalEntryRef: originalRef },
+      });
+
+      // Reverse the entry
+      const reverseRes = await client.callTool({
+        name: 'reverse_journal_entry',
+        arguments: {
+          journalEntryRef: originalRef,
+          date: '2024-01-02',
+          description: 'Reversal of test entry',
+        },
+      });
+      assertPropDefined(reverseRes, 'content');
+      assertArray(reverseRes.content);
+      ok(reverseRes.content.length > 0, 'tool should return content');
+      const reverseText = (reverseRes.content[0] as { text: string }).text;
+      ok(reverseText.includes(`Reversal journal entry created with reference`), 'should confirm reversal creation');
+      ok(reverseText.includes(`for original entry ${originalRef}`), 'should reference original entry');
+    });
+  });
 });

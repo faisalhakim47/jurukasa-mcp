@@ -366,6 +366,70 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
+  server.registerTool('delete_many_journal_entry_drafts', {
+    title: 'Delete many journal entry drafts',
+    description: 'Delete multiple draft journal entries that have not been posted yet.',
+    inputSchema: {
+      journalEntryRefs: z.array(z.number()),
+    },
+  }, async function (params) {
+    if (params.journalEntryRefs.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'No journal entry references provided, nothing to delete.' }],
+      };
+    }
+
+    try {
+      await repo.deleteManyJournalEntryDrafts(params.journalEntryRefs);
+      const results = params.journalEntryRefs.map(ref => `Draft journal entry ${ref} deleted.`);
+      return {
+        content: [{
+          type: 'text',
+          text: results.join('\n'),
+        }],
+      };
+    }
+    catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error deleting journal entry drafts: ${(error as Error).message}` }],
+      };
+    }
+  });
+
+  server.registerTool('reverse_journal_entry', {
+    title: 'Reverse journal entry',
+    description: 'Create a reversal journal entry for a posted journal entry. The reversal will swap debits and credits of the original entry.',
+    inputSchema: {
+      journalEntryRef: z.number(),
+      date: z.string(),
+      description: z.string().optional(),
+    },
+  }, async function (params) {
+    try {
+      const reversalTime = new Date(params.date).getTime();
+      const reversalRef = await repo.reverseJournalEntry(params.journalEntryRef, reversalTime, params.description);
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Reversal journal entry created with reference ${reversalRef} for original entry ${params.journalEntryRef}.`,
+        }],
+      };
+    }
+    catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error reversing journal entry: ${(error as Error).message}` }],
+      };
+    }
+  });
+
+  /**
+   * @TODO Implement tools:
+   * - generate_financial_report: Generate Trial Balance and Balance Sheet snapshots
+   * - get_latest_trial_balance with input { fromDate?: string (optional) }: Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).
+   * - get_latest_balance_sheet with input { fromDate?: string (optional) }: Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).
+   */
+
   server.registerTool('execute_sql_query', {
     title: 'Execute SQL query',
     description: 'Execute a raw SQL query against the accounting database. The sqlite-accounting-schema://schema resource should be provided as context/reference when generating queries to ensure correct table structure and column names.',

@@ -500,6 +500,78 @@ export abstract class AccountingRepository {
     }
   }
 
+  async deleteManyJournalEntryDrafts(journalEntryRefs: number[]): Promise<void> {
+    if (journalEntryRefs.length === 0) {
+      return;
+    }
+    
+    const placeholders = journalEntryRefs.map(() => '?').join(', ');
+    
+    // Delete journal entry lines first
+    await this.rawSql(`
+      DELETE FROM journal_entry_line 
+      WHERE journal_entry_ref IN (${placeholders})
+    `, journalEntryRefs);
+    
+    // Then delete the journal entries
+    await this.rawSql(`
+      DELETE FROM journal_entry 
+      WHERE ref IN (${placeholders}) 
+      AND post_time IS NULL
+    `, journalEntryRefs);
+  }
+
+  async reverseJournalEntry(journalEntryRef: number, reversalTime: number, description?: string): Promise<number> {
+    // Get the original journal entry
+    const originalEntry = await this.sql<{ ref: number; entry_time: number; note: string | null }>`
+      SELECT ref, entry_time, note 
+      FROM journal_entry 
+      WHERE ref = ${journalEntryRef} 
+      AND post_time IS NOT NULL
+    `;
+    
+    if (originalEntry.length === 0) {
+      throw new Error(`Journal entry ${journalEntryRef} not found or not posted`);
+    }
+    
+    // Get the original lines
+    const originalLines = await this.sql<{ account_code: number; debit: number; credit: number }>`
+      SELECT account_code, debit, credit 
+      FROM journal_entry_line 
+      WHERE journal_entry_ref = ${journalEntryRef}
+    `;
+    
+    // Create reversal lines (swap debit and credit)
+    const reversalLines: JournalEntryLine[] = originalLines.map(line => ({
+      accountCode: line.account_code,
+      debit: line.credit,
+      credit: line.debit,
+    }));
+    
+    // Create the reversal journal entry
+    const reversalDescription = description || `Reversal of journal entry ${journalEntryRef}`;
+    const reversalRef = await this.draftJournalEntry({
+      entryTime: reversalTime,
+      description: reversalDescription,
+      lines: reversalLines,
+    });
+    
+    // Update reversal references
+    await this.sql`
+      UPDATE journal_entry 
+      SET reversal_of_ref = ${journalEntryRef} 
+      WHERE ref = ${reversalRef}
+    `;
+    
+    await this.sql`
+      UPDATE journal_entry 
+      SET reversed_by_ref = ${reversalRef} 
+      WHERE ref = ${journalEntryRef}
+    `;
+    
+    return reversalRef;
+  }
+
   async generateFinancialReport(reportTime: number): Promise<number> {
     const result = await this.sql<{ id: number }>`
       INSERT INTO balance_report (report_time, report_type, name, created_at)

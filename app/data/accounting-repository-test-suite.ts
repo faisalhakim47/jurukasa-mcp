@@ -236,5 +236,78 @@ export async function runAccountingRepositoryTestSuite(
       });
     });
 
+    describe('deleteManyJournalEntryDrafts and reverseJournalEntry', function () {
+      it('should delete multiple draft journal entries', async function () {
+        // Create accounts
+        await repo.addAccount(7000, 'Cash Test', 'debit');
+        await repo.addAccount(8000, 'Revenue Test', 'credit');
+
+        // Create multiple drafts
+        const ref1 = await repo.draftJournalEntry({
+          entryTime: Date.now(),
+          description: 'Draft 1',
+          lines: [
+            { accountCode: 7000, debit: 100, credit: 0 },
+            { accountCode: 8000, debit: 0, credit: 100 },
+          ],
+        });
+
+        const ref2 = await repo.draftJournalEntry({
+          entryTime: Date.now(),
+          description: 'Draft 2',
+          lines: [
+            { accountCode: 7000, debit: 200, credit: 0 },
+            { accountCode: 8000, debit: 0, credit: 200 },
+          ],
+        });
+
+        // Delete the drafts
+        await repo.deleteManyJournalEntryDrafts([ref1, ref2]);
+
+        // Verify they are deleted by checking if they still exist in the database
+        const remainingEntries = await repo.rawSql('SELECT ref FROM journal_entry WHERE ref IN (?, ?)', [ref1, ref2]);
+        strictEqual(remainingEntries.length, 0, 'Journal entries should be deleted');
+      });
+
+      it('should reverse a posted journal entry', async function () {
+        // Create accounts
+        await repo.addAccount(9000, 'Cash Reverse', 'debit');
+        await repo.addAccount(10000, 'Revenue Reverse', 'credit');
+
+        // Create and post original entry
+        const originalRef = await repo.draftJournalEntry({
+          entryTime: Date.now() - 1000,
+          description: 'Original entry',
+          lines: [
+            { accountCode: 9000, debit: 500, credit: 0 },
+            { accountCode: 10000, debit: 0, credit: 500 },
+          ],
+        });
+        await repo.postJournalEntry(originalRef, Date.now() - 1000);
+
+        // Reverse the entry
+        const reversalTime = Date.now();
+        const reversalRef = await repo.reverseJournalEntry(originalRef, reversalTime, 'Reversal entry');
+
+        // Verify reversal was created
+        strictEqual(typeof reversalRef, 'number', 'Should return a reversal reference');
+
+        // Check that balances are zeroed out after reversal (since reversal is still draft)
+        const cashAccount = await repo.getAccountByCode(9000);
+        const revenueAccount = await repo.getAccountByCode(10000);
+        strictEqual(cashAccount?.balance, 500, 'Cash should still have original balance before posting reversal');
+        strictEqual(revenueAccount?.balance, 500, 'Revenue should still have original balance before posting reversal');
+
+        // Post the reversal
+        await repo.postJournalEntry(reversalRef, reversalTime);
+
+        // Now balances should be zero
+        const cashAfter = await repo.getAccountByCode(9000);
+        const revenueAfter = await repo.getAccountByCode(10000);
+        strictEqual(cashAfter?.balance, 0, 'Cash balance should be zero after reversal');
+        strictEqual(revenueAfter?.balance, 0, 'Revenue balance should be zero after reversal');
+      });
+    });
+
   });
 }
