@@ -183,6 +183,63 @@ export async function runAccountingRepositoryTestSuite(
         strictEqual(typeof bsA, 'object');
         strictEqual(typeof bsB, 'object');
       });
+
+      it('should get latest trial balance and balance sheet reports', async function () {
+        const reportTime = Date.now();
+
+        // create accounts and a balancing journal entry so balances are non-zero
+        await repo.addAccount(2000, 'Cash A', 'debit');
+        await repo.addAccount(3000, 'Revenue B', 'credit');
+
+        await repo.setAccountTag(2000, 'Balance Sheet - Current Asset');
+        await repo.setAccountTag(3000, 'Balance Sheet - Equity');
+
+        const now = Date.now();
+        const entryId = await repo.draftJournalEntry({
+          entryTime: now,
+          description: 'Populate balances',
+          lines: [
+            { accountCode: 2000, debit: 75, credit: 0 },
+            { accountCode: 3000, debit: 0, credit: 75 },
+          ],
+        });
+        await repo.postJournalEntry(entryId, now);
+
+        const reportId = await repo.generateFinancialReport(reportTime);
+        strictEqual(typeof reportId, 'number');
+
+        // Test getLatestTrialBalance
+        const latestTb = await repo.getLatestTrialBalance();
+        strictEqual(latestTb?.reportTime, reportTime);
+        const tbLineA = latestTb?.lines.find(l => l.accountCode === 2000);
+        const tbLineB = latestTb?.lines.find(l => l.accountCode === 3000);
+        strictEqual(typeof tbLineA, 'object');
+        strictEqual(typeof tbLineB, 'object');
+
+        // Test getLatestBalanceSheet
+        const latestBs = await repo.getLatestBalanceSheet();
+        strictEqual(latestBs?.reportTime, reportTime);
+        const bsLineA = latestBs?.lines.find(l => l.accountCode === 2000);
+        const bsLineB = latestBs?.lines.find(l => l.accountCode === 3000);
+        strictEqual(typeof bsLineA, 'object');
+        strictEqual(typeof bsLineB, 'object');
+
+        // Test with fromDate
+        const futureDate = new Date(reportTime + 1000).toISOString();
+        const latestTbWithDate = await repo.getLatestTrialBalance(futureDate);
+        strictEqual(latestTbWithDate?.reportTime, reportTime);
+
+        const latestBsWithDate = await repo.getLatestBalanceSheet(futureDate);
+        strictEqual(latestBsWithDate?.reportTime, reportTime);
+
+        // Test with past date (should return null)
+        const pastDate = new Date(reportTime - 1000).toISOString();
+        const noTb = await repo.getLatestTrialBalance(pastDate);
+        strictEqual(noTb, null);
+
+        const noBs = await repo.getLatestBalanceSheet(pastDate);
+        strictEqual(noBs, null);
+      });
     });
 
     describe('sql helpers and not-found behaviors', function () {

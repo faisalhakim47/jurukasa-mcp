@@ -423,12 +423,87 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  /**
-   * @TODO Implement tools:
-   * - generate_financial_report: Generate Trial Balance and Balance Sheet snapshots
-   * - get_latest_trial_balance with input { fromDate?: string (optional) }: Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).
-   * - get_latest_balance_sheet with input { fromDate?: string (optional) }: Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).
-   */
+  server.registerTool('get_latest_trial_balance', {
+    title: 'Get latest trial balance',
+    description: 'Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).',
+    inputSchema: {
+      fromDate: z.string().optional(),
+    },
+  }, async function (params) {
+    const userConfig = await repo.getUserConfig();
+    const report = await repo.getLatestTrialBalance(params.fromDate);
+    if (!report) {
+      return {
+        content: [{ type: 'text', text: 'No trial balance reports found.' }],
+      };
+    }
+
+    const headers = ['Account Code', 'Account Name', 'Normal Balance', 'Debit', 'Credit'];
+    const rows = report.lines.map(line => [
+      line.accountCode.toString(),
+      line.accountName,
+      line.normalBalance,
+      formatCurrency(line.debit, userConfig),
+      formatCurrency(line.credit, userConfig),
+    ]);
+    const table = renderAsciiTable(headers, rows);
+
+    return {
+      content: [{
+        type: 'text',
+        text: `Trial Balance Report (${new Date(report.reportTime).toISOString()})\n${table}`,
+      }],
+    };
+  });
+
+  server.registerTool('get_latest_balance_sheet', {
+    title: 'Get latest balance sheet',
+    description: 'Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).',
+    inputSchema: {
+      fromDate: z.string().optional(),
+    },
+  }, async function (params) {
+    const userConfig = await repo.getUserConfig();
+    const report = await repo.getLatestBalanceSheet(params.fromDate);
+    if (!report) {
+      return {
+        content: [{ type: 'text', text: 'No balance sheet reports found.' }],
+      };
+    }
+
+    const headers = ['Classification', 'Category', 'Account Code', 'Account Name', 'Amount'];
+    const rows = report.lines.map(line => [
+      line.classification,
+      line.category,
+      line.accountCode.toString(),
+      line.accountName,
+      formatCurrency(line.amount, userConfig),
+    ]);
+    const table = renderAsciiTable(headers, rows);
+
+    return {
+      content: [{
+        type: 'text',
+        text: `Balance Sheet Report (${new Date(report.reportTime).toISOString()})\n${table}`,
+      }],
+    };
+  });
+
+  server.registerTool('generate_financial_report', {
+    title: 'Generate financial report',
+    description: 'Generate Trial Balance and Balance Sheet snapshots for the current date/time.',
+    inputSchema: {},
+  }, async function () {
+    const reportTime = Date.now();
+    const reportId = await repo.generateFinancialReport(reportTime);
+
+    return {
+      content: [{
+        type: 'text',
+        text: `Financial report generated with ID ${reportId} at ${new Date(reportTime).toISOString()}. Trial Balance and Balance Sheet snapshots have been created.`,
+      }],
+    };
+  });
 
   server.registerTool('execute_sql_query', {
     title: 'Execute SQL query',

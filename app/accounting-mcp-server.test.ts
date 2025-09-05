@@ -69,8 +69,43 @@ suite('AccountingMcpServer', function () {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
           { code: 200, name: 'Revenue', normalBalance: 'credit' },
+          { code: 300, name: 'Equity', normalBalance: 'credit' },
         ],
       },
+    });
+
+    // Tag accounts for balance sheet reporting
+    await client.callTool({
+      name: 'set_many_account_tags',
+      arguments: {
+        taggedAccounts: [
+          { code: 100, tag: 'Balance Sheet - Current Asset' },
+          { code: 300, tag: 'Balance Sheet - Equity' },
+        ],
+      },
+    });
+
+    // Create and post a journal entry to have non-zero balances
+    const draftRes = await client.callTool({
+      name: 'draft_journal_entry',
+      arguments: {
+        date: '2024-01-01',
+        description: 'Initial setup entry',
+        lines: [
+          { accountCode: 100, amount: 1000, type: 'debit' },
+          { accountCode: 300, amount: 1000, type: 'credit' },
+        ],
+      },
+    });
+
+    const draftText = (draftRes.content[0] as { text: string }).text;
+    const refMatch = draftText.match(/reference (\d+)/);
+    assertDefined(refMatch, 'Should extract journal entry reference');
+    const entryRef = parseInt(refMatch[1]);
+
+    await client.callTool({
+      name: 'post_journal_entry',
+      arguments: { journalEntryRef: entryRef },
     });
   });
 
@@ -677,6 +712,129 @@ suite('AccountingMcpServer', function () {
       const reverseText = (reverseRes.content[0] as { text: string }).text;
       ok(reverseText.includes(`Reversal journal entry created with reference`), 'should confirm reversal creation');
       ok(reverseText.includes(`for original entry ${originalRef}`), 'should reference original entry');
+    });
+  });
+
+  describe('Tool: generate_financial_report', function () {
+    it('generates trial balance and balance sheet snapshots', async function () {
+      const res = await client.callTool({
+        name: 'generate_financial_report',
+        arguments: {},
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const text = (res.content[0] as { text: string }).text;
+      ok(text.includes('Financial report generated'), 'should confirm report generation');
+      ok(text.includes('Trial Balance and Balance Sheet snapshots'), 'should mention both reports');
+    });
+  });
+
+  describe('Tool: get_latest_trial_balance', function () {
+    it('returns the latest trial balance report', async function () {
+      // First generate a report
+      await client.callTool({
+        name: 'generate_financial_report',
+        arguments: {},
+      });
+
+      const res = await client.callTool({
+        name: 'get_latest_trial_balance',
+        arguments: {},
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const text = (res.content[0] as { text: string }).text;
+      ok(text.includes('Trial Balance Report'), 'should return trial balance report');
+      ok(text.includes('Cash'), 'should include account names');
+    });
+
+    it('returns no reports when none exist', async function () {
+      // Use a fresh repository for this test
+      const freshRepo = new SqliteAccountingRepository(':memory:');
+      await freshRepo.connect();
+      const freshServer = createAccountingMcpServer(freshRepo);
+      const freshClientTransport = new MemoryTransport();
+      const freshServerTransport = new MemoryTransport();
+      freshClientTransport._paired = freshServerTransport;
+      freshServerTransport._paired = freshClientTransport;
+      const freshClient = new Client({ name: 'fresh-test-client', version: '1.0.0' });
+
+      await Promise.all([
+        freshServer.connect(freshServerTransport),
+        freshClient.connect(freshClientTransport),
+      ]);
+
+      const res = await freshClient.callTool({
+        name: 'get_latest_trial_balance',
+        arguments: {},
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const text = (res.content[0] as { text: string }).text;
+      ok(text.includes('No trial balance reports found'), 'should indicate no reports');
+
+      await Promise.all([
+        freshClient.close(),
+        freshServer.close(),
+      ]);
+      await freshRepo.close();
+    });
+  });
+
+  describe('Tool: get_latest_balance_sheet', function () {
+    it('returns the latest balance sheet report', async function () {
+      // First generate a report
+      await client.callTool({
+        name: 'generate_financial_report',
+        arguments: {},
+      });
+
+      const res = await client.callTool({
+        name: 'get_latest_balance_sheet',
+        arguments: {},
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const text = (res.content[0] as { text: string }).text;
+      ok(text.includes('Balance Sheet Report'), 'should return balance sheet report');
+      ok(text.includes('Assets') || text.includes('Equity'), 'should include classifications');
+    });
+
+    it('returns no reports when none exist', async function () {
+      // Use a fresh repository for this test
+      const freshRepo = new SqliteAccountingRepository(':memory:');
+      await freshRepo.connect();
+      const freshServer = createAccountingMcpServer(freshRepo);
+      const freshClientTransport = new MemoryTransport();
+      const freshServerTransport = new MemoryTransport();
+      freshClientTransport._paired = freshServerTransport;
+      freshServerTransport._paired = freshClientTransport;
+      const freshClient = new Client({ name: 'fresh-test-client', version: '1.0.0' });
+
+      await Promise.all([
+        freshServer.connect(freshServerTransport),
+        freshClient.connect(freshClientTransport),
+      ]);
+
+      const res = await freshClient.callTool({
+        name: 'get_latest_balance_sheet',
+        arguments: {},
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const text = (res.content[0] as { text: string }).text;
+      ok(text.includes('No balance sheet reports found'), 'should indicate no reports');
+
+      await Promise.all([
+        freshClient.close(),
+        freshServer.close(),
+      ]);
+      await freshRepo.close();
     });
   });
 });

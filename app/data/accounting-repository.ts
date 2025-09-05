@@ -613,7 +613,7 @@ export abstract class AccountingRepository {
       lines: reportResult.map(function (row) {
         assertPropNumber(row, 'account_code', 'Account code is not a number');
         assertPropString(row, 'account_name', 'Account name is not a string');
-        assertPropNumber(row, 'normal_balance', 'Normal balance is not a number');
+        assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
         assertPropNumber(row, 'debit', 'Debit is not a number');
         assertPropNumber(row, 'credit', 'Credit is not a number');
         return {
@@ -643,6 +643,130 @@ export abstract class AccountingRepository {
     `;
     if (reportResult.length === 0) {
       throw new Error('Balance sheet report not found');
+    }
+    const firstRow = reportResult[0];
+    assertPropNumber(firstRow, 'report_time', 'Report time is not a number');
+    assertPropString(firstRow, 'report_type', 'Report type is not a string');
+    assertPropString(firstRow, 'report_name', 'Report name is not a string');
+    return {
+      reportTime: firstRow.report_time,
+      reportType: firstRow.report_type,
+      name: firstRow.report_name,
+      lines: reportResult.map(function (row) {
+        assertPropString(row, 'classification', 'Classification is not a string');
+        assertPropString(row, 'category', 'Category is not a string');
+        assertPropNumber(row, 'account_code', 'Account code is not a number');
+        assertPropString(row, 'account_name', 'Account name is not a string');
+        assertPropNumber(row, 'amount', 'Amount is not a number');
+        return {
+          classification: row.classification,
+          category: row.category,
+          accountCode: row.account_code,
+          accountName: row.account_name,
+          amount: row.amount,
+        };
+      }),
+    };
+  }
+
+  async getLatestTrialBalance(fromDate?: string): Promise<TrialBalanceReport | null> {
+    const reportTime = fromDate ? new Date(fromDate).getTime() : Date.now();
+    
+    // First get the latest report_time
+    const latestReportResult = await this.sql<{ report_time: number }>`
+      SELECT report_time
+      FROM trial_balance
+      WHERE report_time <= ${reportTime}
+      ORDER BY report_time DESC
+      LIMIT 1
+    `;
+    
+    if (latestReportResult.length === 0) {
+      return null;
+    }
+    
+    const latestReportTime = latestReportResult[0].report_time;
+    
+    // Then get all lines for that report
+    const reportResult = await this.sql`
+      SELECT
+        tb.report_time,
+        tb.report_type,
+        tb.name AS report_name,
+        tb.account_code,
+        tb.account_name,
+        tb.normal_balance,
+        tb.debit,
+        tb.credit
+      FROM trial_balance tb
+      WHERE tb.report_time = ${latestReportTime}
+      ORDER BY tb.account_code
+    `;
+    
+    if (reportResult.length === 0) {
+      return null;
+    }
+    const firstRow = reportResult[0];
+    assertPropNumber(firstRow, 'report_time', 'Report time is not a number');
+    assertPropString(firstRow, 'report_type', 'Report type is not a string');
+    assertPropString(firstRow, 'report_name', 'Report name is not a string');
+    return {
+      reportTime: firstRow.report_time,
+      reportType: firstRow.report_type,
+      name: firstRow.report_name,
+      lines: reportResult.map(function (row) {
+        assertPropNumber(row, 'account_code', 'Account code is not a number');
+        assertPropString(row, 'account_name', 'Account name is not a string');
+        assertPropNumber(row, 'normal_balance', 'Normal balance is not a number');
+        assertPropNumber(row, 'debit', 'Debit is not a number');
+        assertPropNumber(row, 'credit', 'Credit is not a number');
+        return {
+          accountCode: row.account_code,
+          accountName: row.account_name,
+          normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
+          debit: row.debit,
+          credit: row.credit,
+        };
+      }),
+    };
+  }
+
+  async getLatestBalanceSheet(fromDate?: string): Promise<BalanceSheetReport | null> {
+    const reportTime = fromDate ? new Date(fromDate).getTime() : Date.now();
+    
+    // First get the latest report_time
+    const latestReportResult = await this.sql<{ report_time: number }>`
+      SELECT report_time
+      FROM balance_sheet
+      WHERE report_time <= ${reportTime}
+      ORDER BY report_time DESC
+      LIMIT 1
+    `;
+    
+    if (latestReportResult.length === 0) {
+      return null;
+    }
+    
+    const latestReportTime = latestReportResult[0].report_time;
+    
+    // Then get all lines for that report
+    const reportResult = await this.sql`
+      SELECT
+        bs.report_time,
+        bs.report_type,
+        bs.name AS report_name,
+        bs.classification,
+        bs.category,
+        bs.account_code,
+        bs.account_name,
+        bs.amount
+      FROM balance_sheet bs
+      WHERE bs.report_time = ${latestReportTime}
+      ORDER BY bs.classification, bs.category, bs.account_code
+    `;
+    
+    if (reportResult.length === 0) {
+      return null;
     }
     const firstRow = reportResult[0];
     assertPropNumber(firstRow, 'report_time', 'Report time is not a number');
