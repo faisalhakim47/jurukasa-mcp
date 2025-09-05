@@ -50,11 +50,11 @@ CREATE INDEX IF NOT EXISTS user_config_updated_at_index ON user_config (updated_
 
 -- Insert default user configuration
 INSERT OR IGNORE INTO user_config (key, value, description, created_at, updated_at) VALUES
-  ('Schema Version', '1', 'User database schema version', 0, 0),
   ('Business Name', '', 'Business or entity name', 0, 0),
   ('Business Type', 'Small Business', 'Type of business entity', 0, 0),
   ('Currency Code', 'IDR', 'Base currency code (ISO 4217)', 0, 0),
   ('Currency Decimals', '0', 'Number of decimal places for currency (0 for IDR)', 0, 0),
+  ('Locale', 'en-ID', 'ISO 639-1 and ISO 3166-1 separated by hyphen (e.g., en-US, en-ID)', 0, 0),
   ('Fiscal Year Start Month', '1', 'Fiscal year start month (1-12)', 0, 0); -- EOS
 
 -- ==========================================================================
@@ -80,6 +80,100 @@ CREATE INDEX IF NOT EXISTS account_active_index ON account (is_active, code) WHE
 CREATE INDEX IF NOT EXISTS account_posting_index ON account (is_posting_account, code) WHERE is_posting_account = 1; -- EOS
 CREATE INDEX IF NOT EXISTS account_parent_index ON account (control_account_code) WHERE control_account_code IS NOT NULL; -- EOS
 CREATE INDEX IF NOT EXISTS account_balance_index ON account (balance) WHERE balance != 0; -- EOS
+
+-- Prevent assigning a control_account_code to an account when the target
+-- control account has non-zero posted journal entry totals. The control
+-- account must be zeroed-out (no net posted debit/credit) before it can be
+-- used as a parent/control account.
+DROP TRIGGER IF EXISTS account_control_set_on_insert_validation_trigger; -- EOS
+CREATE TRIGGER account_control_set_on_insert_validation_trigger
+BEFORE INSERT ON account FOR EACH ROW
+WHEN NEW.control_account_code IS NOT NULL
+BEGIN
+  SELECT
+    CASE
+      WHEN (
+        SELECT COALESCE(SUM(jel.debit) - SUM(jel.credit), 0)
+        FROM journal_entry_line jel
+        JOIN journal_entry je ON je.ref = jel.journal_entry_ref
+        WHERE jel.account_code = NEW.control_account_code
+          AND je.post_time IS NOT NULL
+      ) != 0
+      THEN RAISE(ABORT, 'Cannot set control_account_code on insert: target control account has non-zero posted entries')
+    END;
+END; -- EOS
+
+DROP TRIGGER IF EXISTS account_control_set_on_update_validation_trigger; -- EOS
+CREATE TRIGGER account_control_set_on_update_validation_trigger
+BEFORE UPDATE ON account FOR EACH ROW
+WHEN NEW.control_account_code IS NOT NULL AND (OLD.control_account_code IS NULL OR NEW.control_account_code != OLD.control_account_code)
+BEGIN
+  SELECT
+    CASE
+      WHEN (
+        SELECT COALESCE(SUM(jel.debit) - SUM(jel.credit), 0)
+        FROM journal_entry_line jel
+        JOIN journal_entry je ON je.ref = jel.journal_entry_ref
+        WHERE jel.account_code = NEW.control_account_code
+          AND je.post_time IS NOT NULL
+      ) != 0
+      THEN RAISE(ABORT, 'Cannot set control_account_code on update: target control account has non-zero posted entries')
+    END;
+END; -- EOS
+
+-- Maintain is_posting_account flag automatically:
+-- - When a child is added with a control_account_code, mark the parent as non-posting (0).
+-- - When a child's parent link is removed or changed, and the old parent has no remaining children,
+--   mark the old parent as posting (1).
+-- - When a child is deleted, update the parent's is_posting_account accordingly.
+
+DROP TRIGGER IF EXISTS account_child_insert_trigger; -- EOS
+CREATE TRIGGER account_child_insert_trigger
+AFTER INSERT ON account FOR EACH ROW
+WHEN NEW.control_account_code IS NOT NULL
+BEGIN
+  UPDATE account
+  SET is_posting_account = 0,
+      updated_at = NEW.updated_at
+  WHERE code = NEW.control_account_code
+    AND is_posting_account != 0;
+END; -- EOS
+
+DROP TRIGGER IF EXISTS account_child_update_trigger; -- EOS
+CREATE TRIGGER account_child_update_trigger
+AFTER UPDATE OF control_account_code ON account FOR EACH ROW
+BEGIN
+  -- Update old parent: if it now has no children, mark it as posting (1), otherwise keep non-posting (0)
+  UPDATE account
+  SET is_posting_account = CASE WHEN (
+      SELECT COUNT(1) FROM account a WHERE a.control_account_code = OLD.control_account_code
+    ) > 0 THEN 0 ELSE 1 END,
+    updated_at = NEW.updated_at
+  WHERE code = OLD.control_account_code
+    AND OLD.control_account_code IS NOT NULL;
+
+  -- Update new parent: ensure it's marked as non-posting (0)
+  UPDATE account
+  SET is_posting_account = 0,
+      updated_at = NEW.updated_at
+  WHERE code = NEW.control_account_code
+    AND NEW.control_account_code IS NOT NULL
+    AND is_posting_account != 0;
+END; -- EOS
+
+DROP TRIGGER IF EXISTS account_child_delete_trigger; -- EOS
+CREATE TRIGGER account_child_delete_trigger
+AFTER DELETE ON account FOR EACH ROW
+WHEN OLD.control_account_code IS NOT NULL
+BEGIN
+  UPDATE account
+  SET is_posting_account = CASE WHEN (
+      SELECT COUNT(1) FROM account a WHERE a.control_account_code = OLD.control_account_code
+    ) > 0 THEN 0 ELSE 1 END,
+    updated_at = strftime('%s','now')
+  WHERE code = OLD.control_account_code;
+END; -- EOS
+
 
 -- Account classification and reporting tags
 CREATE TABLE IF NOT EXISTS account_tag (
@@ -213,6 +307,33 @@ CREATE TABLE IF NOT EXISTS journal_entry_line (
 CREATE INDEX IF NOT EXISTS journal_entry_line_account_debit_credit_index ON journal_entry_line (account_code, debit, credit); -- EOS
 CREATE INDEX IF NOT EXISTS journal_entry_line_journal_account_index ON journal_entry_line(account_code, journal_entry_ref); -- EOS
 CREATE INDEX IF NOT EXISTS journal_entry_line_ref_line_index ON journal_entry_line (journal_entry_ref, line_number); -- EOS
+
+-- Prevent creating or modifying journal entry lines that post directly to
+-- a control (parent) account. Posting must be done to posting (leaf)
+-- accounts only.
+DROP TRIGGER IF EXISTS journal_entry_line_control_account_insert_prevention_trigger; -- EOS
+CREATE TRIGGER journal_entry_line_control_account_insert_prevention_trigger
+BEFORE INSERT ON journal_entry_line FOR EACH ROW
+BEGIN
+  SELECT
+    CASE
+      WHEN EXISTS(
+        SELECT 1 FROM account a WHERE a.control_account_code = NEW.account_code LIMIT 1
+      ) THEN RAISE(ABORT, 'Cannot post journal entry line to a control account on insert')
+    END;
+END; -- EOS
+
+DROP TRIGGER IF EXISTS journal_entry_line_control_account_update_prevention_trigger; -- EOS
+CREATE TRIGGER journal_entry_line_control_account_update_prevention_trigger
+BEFORE UPDATE ON journal_entry_line FOR EACH ROW
+BEGIN
+  SELECT
+    CASE
+      WHEN EXISTS(
+        SELECT 1 FROM account a WHERE a.control_account_code = NEW.account_code LIMIT 1
+      ) THEN RAISE(ABORT, 'Cannot post journal entry line to a control account on update')
+    END;
+END; -- EOS
 
 -- Validation trigger for posting journal entries
 DROP TRIGGER IF EXISTS journal_entry_post_validation_trigger; -- EOS
@@ -810,9 +931,6 @@ ORDER BY cr.report_time DESC,
     WHEN 'Financing' THEN 3
   END,
   csl.line_description; -- EOS
-
--- Update schema version (this can be done without time)
-UPDATE user_config SET value = '1' WHERE key = 'Schema Version'; -- EOS
 
 -- Validate foreign key constraints
 PRAGMA foreign_key_check; -- EOS

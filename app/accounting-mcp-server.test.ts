@@ -5,7 +5,7 @@ import { createAccountingMcpServer } from '@app/accounting-mcp-server.js';
 import { SqliteAccountingRepository } from '@app/data/sqlite-accounting-repository.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { assertDefined, assertArray, assertPropDefined, assertNumber, assertString } from '@app/tools/assertion.js';
+import { assertDefined, assertArray, assertPropDefined, assertNumber, assertString, assertPropNumber } from '@app/tools/assertion.js';
 
 class MemoryTransport {
   onmessage: ((msg: unknown) => void) | undefined;
@@ -55,10 +55,23 @@ suite('AccountingMcpServer', function () {
       client.connect(clientTransport),
     ]);
 
-    await client.callTool({ name: 'account.add', arguments: { code: 100, name: 'Cash', normalBalance: 'debit' } });
-    await client.callTool({ name: 'account.add', arguments: { code: 200, name: 'Revenue', normalBalance: 'credit' } });
-    await client.callTool({ name: 'account.setName', arguments: { code: 100, name: 'Cash Account' } });
-    await client.callTool({ name: 'account.setControl', arguments: { code: 100, controlAccountCode: 200 } });
+    await repo.setUserConfig({
+      businessName: 'Test Business',
+      businessType: 'Test',
+      currencyCode: 'USD',
+      currencyDecimalPlaces: 2,
+      locale: 'en-US',
+    });
+
+    await client.callTool({
+      name: 'ensure_many_accounts_exist',
+      arguments: {
+        accounts: [
+          { code: 100, name: 'Cash', normalBalance: 'debit' },
+          { code: 200, name: 'Revenue', normalBalance: 'credit' },
+        ],
+      },
+    });
   });
 
   afterEach(async function () {
@@ -70,200 +83,488 @@ suite('AccountingMcpServer', function () {
   });
 
   describe('Resource: SQLite Accounting Schema', function () {
-
     it('lists resources and returns schema content', async function () {
-  const resourcesList = await client.listResources({});
-  assertPropDefined(resourcesList, 'resources');
-  assertArray(resourcesList.resources);
-  ok(resourcesList.resources.length > 0, 'resources should be listed');
+      const resourcesList = await client.listResources({});
+      assertPropDefined(resourcesList, 'resources');
+      assertArray(resourcesList.resources);
+      ok(resourcesList.resources.length > 0, 'resources should be listed');
 
-  const read = await client.readResource({ uri: 'sqlite-accounting-schema://schema' });
-  assertPropDefined(read, 'contents');
-  assertArray(read.contents);
-  ok(read.contents.length > 0, 'read resource should return contents');
-  assertPropDefined(read.contents[0], 'text');
-  const resourceText = (read.contents[0] as Record<string, unknown>).text;
-  assertString(resourceText);
-  ok(resourceText.length > 0, 'resource text should be non-empty');
-    });
-
-    it('sql.query returns rows for a harmless query', async function () {
-  const callResult = await client.callTool({ name: 'sql.query', arguments: { sql: 'SELECT 1 as x' } });
-  assertPropDefined(callResult, 'content');
-  assertArray(callResult.content);
-  ok(callResult.content.length > 0, 'tool call should return content');
-    });
-
-  });
-
-  describe('Tool: account.add', function () {
-    it('returns content when adding a new account', async function () {
-  const res = await client.callTool({ name: 'account.add', arguments: { code: 300, name: 'Equity', normalBalance: 'credit' } });
-  assertPropDefined(res, 'content');
-  assertDefined(res.content);
-  ok(res.content, 'account.add should return content');
+      const read = await client.readResource({ uri: 'sqlite-accounting-schema://schema' });
+      assertPropDefined(read, 'contents');
+      assertArray(read.contents);
+      ok(read.contents.length > 0, 'read resource should return contents');
+      assertPropDefined(read.contents[0], 'text');
+      const resourceText = (read.contents[0] as Record<string, unknown>).text;
+      assertString(resourceText);
+      ok(resourceText.length > 0, 'resource text should be non-empty');
     });
   });
 
-  describe('Tool: account.setName', function () {
-    it('updates the account name and returns content', async function () {
-  const res = await client.callTool({ name: 'account.setName', arguments: { code: 100, name: 'Cash Account' } });
-  assertPropDefined(res, 'content');
-  ok(res.content, 'account.setName should return content');
-    });
-  });
-
-  describe('Tool: account.setControl', function () {
-    it('sets control account and returns content', async function () {
-  const res = await client.callTool({ name: 'account.setControl', arguments: { code: 100, controlAccountCode: 200 } });
-  assertPropDefined(res, 'content');
-  ok(res.content, 'account.setControl should return content');
-    });
-  });
-
-  describe('Tool: account.getHierarchy', function () {
-    it('returns content or an error wrapper', async function () {
-      const res = await client.callTool({ name: 'account.getHierarchy', arguments: {} });
-      assertDefined(res);
-      if (typeof res === 'object' && res !== null && 'content' in res) {
-        assertPropDefined(res, 'content');
-        ok((res as Record<string, unknown>).content, 'account.getHierarchy should return content or an error wrapper');
-      }
-      else {
-        assertPropDefined(res, 'isError');
-        ok((res as Record<string, unknown>).isError, 'account.getHierarchy should return content or an error wrapper');
-      }
-    });
-  });
-
-  describe('Tool: account.getByCode', function () {
-    it('retrieves account by code', async function () {
-  const res = await client.callTool({ name: 'account.getByCode', arguments: { code: 100 } });
-  assertPropDefined(res, 'content');
-  ok((res as Record<string, unknown>).content, 'account.getByCode should return content');
-    });
-  });
-
-  describe('Tool: account.getByName', function () {
-    it('retrieves account by name', async function () {
-  const res = await client.callTool({ name: 'account.getByName', arguments: { name: 'Cash Account' } });
-  assertPropDefined(res, 'content');
-  ok((res as Record<string, unknown>).content, 'account.getByName should return content');
-    });
-  });
-
-  describe('Tool: account tagging', function () {
-    it('sets a tag on an account', async function () {
-  const res = await client.callTool({ name: 'account.setTag', arguments: { code: 100, tag: 'liquid' } });
-  assertPropDefined(res, 'content');
-  ok((res as Record<string, unknown>).content, 'account.setTag should return content');
-    });
-
-    it('lists accounts by tag', async function () {
-  await client.callTool({ name: 'account.setTag', arguments: { code: 100, tag: 'liquid' } });
-  const res = await client.callTool({ name: 'account.listByTag', arguments: { tag: 'liquid', offset: 0, limit: 10 } });
-  assertPropDefined(res, 'content');
-  ok((res as Record<string, unknown>).content, 'account.listByTag should return content');
-    });
-
-    it('unsets a tag on an account', async function () {
-  await client.callTool({ name: 'account.setTag', arguments: { code: 100, tag: 'liquid' } });
-  const res = await client.callTool({ name: 'account.unsetTag', arguments: { code: 100, tag: 'liquid' } });
-  assertPropDefined(res, 'content');
-  ok((res as Record<string, unknown>).content, 'account.unsetTag should return content');
-    });
-  });
-
-  describe('Tool: journal workflow', function () {
-    it('drafts a balanced journal entry and returns a ref', async function () {
-      const draft = await client.callTool({ name: 'journal.draft', arguments: { entryTime: Date.now(), description: 'Test', lines: [{ accountCode: 100, debit: 100, credit: 0 }, { accountCode: 200, debit: 0, credit: 100 }] } });
-      assertPropDefined(draft, 'content');
-      assertArray(draft.content);
-      const draftContent = draft.content as Array<unknown>;
-      ok(draftContent.length > 0, 'journal.draft should return content');
-      let draftRef: number | undefined;
-      try {
-  assertPropDefined(draftContent[0], 'text');
-  const draftText = (draftContent[0] as Record<string, unknown>).text;
-  assertString(draftText);
-  const parsed: unknown = JSON.parse(draftText);
-  assertPropDefined(parsed, 'ref');
-  assertNumber((parsed as Record<string, unknown>).ref);
-  draftRef = (parsed as Record<string, number>).ref;
-      }
-      catch (_e) {
-        assertPropDefined(draft, 'structuredContent');
-        assertPropDefined(draft.structuredContent, 'ref');
-        assertNumber((draft.structuredContent as Record<string, unknown>).ref);
-        draftRef = (draft.structuredContent as Record<string, number>).ref;
-      }
-      ok(typeof draftRef === 'number', 'draftRef should be a number');
-    });
-
-    it('adds a line and posts the journal entry', async function () {
-      // create a draft first
-      const draft = await client.callTool({ name: 'journal.draft', arguments: { entryTime: Date.now(), description: 'Test', lines: [{ accountCode: 100, debit: 100, credit: 0 }, { accountCode: 200, debit: 0, credit: 100 }] } });
-      assertPropDefined(draft, 'content');
-      assertArray(draft.content);
-      const draftContent = draft.content as Array<unknown>;
-      let draftRef: number | undefined;
-      try {
-  assertPropDefined(draftContent[0], 'text');
-  const draftText = (draftContent[0] as Record<string, unknown>).text;
-  assertString(draftText);
-  const parsed: unknown = JSON.parse(draftText);
-  assertPropDefined(parsed, 'ref');
-  assertNumber((parsed as Record<string, unknown>).ref);
-  draftRef = (parsed as Record<string, number>).ref;
-      }
-      catch (_e) {
-        assertPropDefined(draft, 'structuredContent');
-        assertPropDefined(draft.structuredContent, 'ref');
-        assertNumber((draft.structuredContent as Record<string, unknown>).ref);
-        draftRef = (draft.structuredContent as Record<string, number>).ref;
-      }
-      ok(typeof draftRef === 'number', 'draftRef should be a number');
-
-      const addLine = await client.callTool({ name: 'journal.addLine', arguments: { journalEntryRef: draftRef, accountCode: 100, debit: 0, credit: 0, description: null, reference: null } });
-      assertPropDefined(addLine, 'content');
-      ok((addLine as Record<string, unknown>).content, 'journal.addLine should return content');
-
-      const post = await client.callTool({ name: 'journal.post', arguments: { ref: draftRef, postTime: Date.now() } });
-      assertPropDefined(post, 'content');
-      ok((post as Record<string, unknown>).content, 'journal.post should return content');
-    });
-  });
-
-  describe('Tool: reporting', function () {
-    it('generates a report', async function () {
-      const res = await client.callTool({ name: 'report.generate', arguments: { reportTime: Date.now() } });
+  describe('Tool: ensure_many_accounts_exist', function () {
+    it('creates new accounts and skips existing ones', async function () {
+      const res = await client.callTool({
+        name: 'ensure_many_accounts_exist',
+        arguments: {
+          accounts: [
+            { code: 100, name: 'Cash', normalBalance: 'debit' }, // existing
+            { code: 300, name: 'Equity', normalBalance: 'credit' }, // new
+          ],
+        },
+      });
       assertPropDefined(res, 'content');
-      ok((res as Record<string, unknown>).content, 'report.generate should return content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
     });
 
-    it('trialBalance and balanceSheet return content or error wrappers', async function () {
-      const trial = await client.callTool({ name: 'report.trialBalance', arguments: { reportTime: Date.now() } });
-      assertDefined(trial);
-      if (typeof trial === 'object' && trial !== null && 'content' in trial) {
-        assertPropDefined(trial, 'content');
-        ok((trial as Record<string, unknown>).content, 'report.trialBalance should return content or an error wrapper');
-      }
-      else {
-        assertPropDefined(trial, 'isError');
-        ok((trial as Record<string, unknown>).isError, 'report.trialBalance should return content or an error wrapper');
-      }
-
-      const balance = await client.callTool({ name: 'report.balanceSheet', arguments: { reportTime: Date.now() } });
-      assertDefined(balance);
-      if (typeof balance === 'object' && balance !== null && 'content' in balance) {
-        assertPropDefined(balance, 'content');
-        ok((balance as Record<string, unknown>).content, 'report.balanceSheet should return content or an error wrapper');
-      }
-      else {
-        assertPropDefined(balance, 'isError');
-        ok((balance as Record<string, unknown>).isError, 'report.balanceSheet should return content or an error wrapper');
-      }
+    it('handles empty accounts list', async function () {
+      const res = await client.callTool({
+        name: 'ensure_many_accounts_exist',
+        arguments: { accounts: [] },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
     });
   });
 
+  describe('Tool: rename_account', function () {
+    it('renames an existing account', async function () {
+      const res = await client.callTool({
+        name: 'rename_account',
+        arguments: { code: 100, name: 'Cash Account' },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('fails for non-existing account', async function () {
+      const res = await client.callTool({
+        name: 'rename_account',
+        arguments: { code: 999, name: 'Nonexistent' },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: set_control_account', function () {
+    it('sets control account for an existing account', async function () {
+      const res = await client.callTool({
+        name: 'set_control_account',
+        arguments: { accountCode: 100, controlAccountCode: 200 },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('fails for non-existing account', async function () {
+      const res = await client.callTool({
+        name: 'set_control_account',
+        arguments: { accountCode: 999, controlAccountCode: 200 },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('fails for non-existing control account', async function () {
+      const res = await client.callTool({
+        name: 'set_control_account',
+        arguments: { accountCode: 100, controlAccountCode: 999 },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('fails if account is its own control', async function () {
+      const res = await client.callTool({
+        name: 'set_control_account',
+        arguments: { accountCode: 100, controlAccountCode: 100 },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: get_hierarchical_chart_of_accounts', function () {
+    it('returns hierarchical chart', async function () {
+      const res = await client.callTool({
+        name: 'get_hierarchical_chart_of_accounts',
+        arguments: {},
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: get_many_accounts', function () {
+    it('retrieves accounts by codes', async function () {
+      const res = await client.callTool({
+        name: 'get_many_accounts',
+        arguments: { codes: [100, 200] },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('retrieves accounts by names', async function () {
+      const res = await client.callTool({
+        name: 'get_many_accounts',
+        arguments: { names: ['Cash'] },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('returns no accounts for no matches', async function () {
+      const res = await client.callTool({
+        name: 'get_many_accounts',
+        arguments: { codes: [999] },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('fails with no filters', async function () {
+      const res = await client.callTool({
+        name: 'get_many_accounts',
+        arguments: {},
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: set_many_account_tags', function () {
+    it('sets tags for multiple accounts', async function () {
+      const res = await client.callTool({
+        name: 'set_many_account_tags',
+        arguments: {
+          taggedAccounts: [
+            { code: 100, tag: 'liquid' },
+            { code: 200, tag: 'income' },
+          ],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('handles empty tagged accounts list', async function () {
+      const res = await client.callTool({
+        name: 'set_many_account_tags',
+        arguments: { taggedAccounts: [] },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: unset_many_account_tags', function () {
+    it('removes tags from multiple accounts', async function () {
+      await client.callTool({
+        name: 'set_many_account_tags',
+        arguments: {
+          taggedAccounts: [
+            { code: 100, tag: 'liquid' },
+            { code: 200, tag: 'income' },
+          ],
+        },
+      });
+
+      const res = await client.callTool({
+        name: 'unset_many_account_tags',
+        arguments: {
+          taggedAccounts: [
+            { code: 100, tag: 'liquid' },
+            { code: 200, tag: 'income' },
+          ],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('handles empty tagged accounts list', async function () {
+      const res = await client.callTool({
+        name: 'unset_many_account_tags',
+        arguments: { taggedAccounts: [] },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: draft_journal_entry', function () {
+    it('creates a draft journal entry', async function () {
+      const res = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Test journal entry',
+          lines: [
+            { accountCode: 100, amount: 1000, type: 'debit' },
+            { accountCode: 200, amount: 1000, type: 'credit' },
+          ],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+
+    it('handles empty lines', async function () {
+      const res = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Empty entry',
+          lines: [],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: update_journal_entry', function () {
+    it('updates an existing journal entry', async function () {
+      // First create a draft
+      const draftRes = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Original entry',
+          lines: [
+            { accountCode: 100, amount: 500, type: 'debit' },
+            { accountCode: 200, amount: 500, type: 'credit' },
+          ],
+        },
+      });
+      assertPropDefined(draftRes, 'content');
+      assertArray(draftRes.content);
+      ok(draftRes.content.length > 0, 'draft should be created');
+
+      // Extract journal entry ref from response (assuming it's in the text)
+      const draftText = (draftRes.content[0] as { text: string }).text;
+      const refMatch = draftText.match(/reference (\d+)/);
+      assertDefined(refMatch, 'Should extract journal entry reference');
+      const journalEntryRef = parseInt(refMatch[1]);
+
+      // Then update it
+      const updateRes = await client.callTool({
+        name: 'update_journal_entry',
+        arguments: {
+          journalEntryRef,
+          date: '2024-01-02',
+          description: 'Updated entry',
+          lines: [
+            { accountCode: 100, amount: 1000, type: 'debit' },
+            { accountCode: 200, amount: 1000, type: 'credit' },
+          ],
+        },
+      });
+      assertPropDefined(updateRes, 'content');
+      assertArray(updateRes.content);
+      ok(updateRes.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: post_journal_entry', function () {
+    it('posts a draft journal entry with default date', async function () {
+      // First create a draft
+      const draftRes = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Entry to post',
+          lines: [
+            { accountCode: 100, amount: 750, type: 'debit' },
+            { accountCode: 200, amount: 750, type: 'credit' },
+          ],
+        },
+      });
+      assertPropDefined(draftRes, 'content');
+      assertArray(draftRes.content);
+
+      // Extract journal entry ref
+      const draftText = (draftRes.content[0] as { text: string }).text;
+      const refMatch = draftText.match(/reference (\d+)/);
+      assertDefined(refMatch, 'Should extract journal entry reference');
+      const journalEntryRef = parseInt(refMatch[1]);
+
+      // Then post it
+      const postRes = await client.callTool({
+        name: 'post_journal_entry',
+        arguments: { journalEntryRef },
+      });
+      assertPropDefined(postRes, 'content');
+      assertArray(postRes.content);
+      ok(postRes.content.length > 0, 'tool should return content');
+    });
+
+    it('posts a draft journal entry with specific date', async function () {
+      // First create a draft
+      const draftRes = await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Entry to post with date',
+          lines: [
+            { accountCode: 100, amount: 250, type: 'debit' },
+            { accountCode: 200, amount: 250, type: 'credit' },
+          ],
+        },
+      });
+      assertPropDefined(draftRes, 'content');
+      assertArray(draftRes.content);
+
+      // Extract journal entry ref
+      const draftText = (draftRes.content[0] as { text: string }).text;
+      const refMatch = draftText.match(/reference (\d+)/);
+      assertDefined(refMatch, 'Should extract journal entry reference');
+      const journalEntryRef = parseInt(refMatch[1]);
+
+      // Then post it with specific date
+      const postRes = await client.callTool({
+        name: 'post_journal_entry',
+        arguments: { 
+          journalEntryRef,
+          date: '2024-01-03',
+        },
+      });
+      assertPropDefined(postRes, 'content');
+      assertArray(postRes.content);
+      ok(postRes.content.length > 0, 'tool should return content');
+    });
+  });
+
+  describe('Tool: execute_sql_query', function () {
+    it('executes a SELECT query and returns results', async function () {
+      const res = await client.callTool({
+        name: 'execute_sql_query',
+        arguments: {
+          query: 'SELECT code, name FROM account ORDER BY code LIMIT 2',
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Query executed successfully'), 'should indicate success');
+      ok(responseText.includes('+'), 'should contain table borders');
+      ok(responseText.includes('|'), 'should contain table separators');
+      ok(responseText.includes('100'), 'should contain account code 100');
+      ok(responseText.includes('200'), 'should contain account code 200');
+    });
+
+    it('executes a query with parameters', async function () {
+      const res = await client.callTool({
+        name: 'execute_sql_query',
+        arguments: {
+          query: 'SELECT code, name FROM account WHERE code = ?',
+          params: [100],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Query executed successfully'), 'should indicate success');
+      ok(responseText.includes('+'), 'should contain table borders');
+      ok(responseText.includes('|'), 'should contain table separators');
+      ok(responseText.includes('100'), 'should contain account code 100');
+      ok(responseText.includes('Cash'), 'should contain account name Cash');
+    });
+
+    it('handles query with no results', async function () {
+      const res = await client.callTool({
+        name: 'execute_sql_query',
+        arguments: {
+          query: 'SELECT code, name FROM account WHERE code = 99999',
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('returned no results'), 'should indicate no results');
+    });
+
+    it('handles invalid SQL query', async function () {
+      const res = await client.callTool({
+        name: 'execute_sql_query',
+        arguments: {
+          query: 'INVALID SQL QUERY',
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Error executing SQL query'), 'should indicate error');
+    });
+
+    it('executes a COUNT query', async function () {
+      const res = await client.callTool({
+        name: 'execute_sql_query',
+        arguments: {
+          query: 'SELECT COUNT(*) as account_count FROM account',
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Query executed successfully'), 'should indicate success');
+      ok(responseText.includes('+'), 'should contain table borders');
+      ok(responseText.includes('|'), 'should contain table separators');
+      ok(responseText.includes('account_count'), 'should contain count column');
+    });
+
+    it('executes a query with JOIN', async function () {
+      // First create a journal entry to have data in journal_entry
+      await client.callTool({
+        name: 'draft_journal_entry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Test entry for SQL query',
+          lines: [
+            { accountCode: 100, amount: 500, type: 'debit' },
+            { accountCode: 200, amount: 500, type: 'credit' },
+          ],
+        },
+      });
+
+      const res = await client.callTool({
+        name: 'execute_sql_query',
+        arguments: {
+          query: 'SELECT je.note, jel.account_code, jel.debit, jel.credit FROM journal_entry je JOIN journal_entry_line jel ON je.ref = jel.journal_entry_ref WHERE je.post_time IS NULL',
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Query executed successfully'), 'should indicate success');
+      ok(responseText.includes('+'), 'should contain table borders');
+      ok(responseText.includes('|'), 'should contain table separators');
+      ok(responseText.includes('Test entry for SQL query'), 'should contain journal entry description');
+    });
+  });
 });

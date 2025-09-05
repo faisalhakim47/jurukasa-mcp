@@ -25,9 +25,9 @@ export class SqliteAccountingRepository extends AccountingRepository {
       const schemaContent = await readFile(file, { encoding: 'utf-8' });
       const statements = schemaContent.split('-- EOS');
       for (const statement of statements) {
-        const trimmed = statement.trim();
-        if (trimmed && trimmed.length > 0) {
-          this.#db.exec(trimmed);
+        const trimmedStatement = statement.trim();
+        if (trimmedStatement && trimmedStatement.length > 0) {
+          this.#db.exec(trimmedStatement);
         }
       }
     }

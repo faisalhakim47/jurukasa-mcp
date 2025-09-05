@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { AccountingRepository } from '@app/data/accounting-repository.js';
+import { AccountingRepository, ChartOfAccount } from '@app/data/accounting-repository.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
+import { AsciiHierarcy, formatCurrency, renderAsciiHierarchy, renderAsciiTable } from '@app/formatter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,234 +31,381 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     'sqlite-accounting-schema://schema',
     {
       title: 'SQLite accounting database schema (LLM reference)',
-      description:
-        'Full SQLite schema for the accounting database. MCP clients should fetch this resource and supply it as reference/context when generating SQL for the sql.query tool.',
+      description: 'Full SQLite schema for the accounting database. MCP clients should fetch this resource and supply it as reference/context when generating SQL for the sql.query tool.',
       mimeType: 'text/sql',
     },
     async function () {
       const schemaText = await readSqliteAccountingSchema();
       return {
-        contents: [{ uri: 'sqlite-accounting-schema://schema', mimeType: 'text/sql', text: schemaText }],
+        contents: [{
+          uri: 'sqlite-accounting-schema://schema',
+          mimeType: 'text/sql',
+          text: schemaText,
+        }],
       };
     }
   );
 
-  server.registerTool('account.add', {
-    title: 'Add account',
-    description: 'Create a new account with a numeric code, name and normal balance (debit|credit).',
+  server.registerTool('ensure_many_accounts_exist', {
+    title: 'Ensure many accounts exist',
+    description: 'Check that multiple accounts exist by each code, creating any that are missing. This tool does not update existing accounts.',
     inputSchema: {
-      code: z.number(),
-      name: z.string(),
-      normalBalance: z.enum(['debit', 'credit']),
+      accounts: z.array(z.object({
+        code: z.number(),
+        name: z.string(),
+        normalBalance: z.enum(['debit', 'credit']),
+      })),
     },
-    outputSchema: {},
   }, async function (params) {
-    await repo.addAccount(params.code, params.name, params.normalBalance);
+    if (params.accounts.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'No accounts provided, nothing to do.' }],
+      };
+    }
+
+    const userConfig = await repo.getUserConfig();
+    const existingAccounts = await repo.getManyAccountsByCodes(params.accounts.map(a => a.code));
+
+    const results: Array<string> = [];
+
+    accountLoop:
+    for (const account of params.accounts) {
+      const existingAccount = existingAccounts.find(a => a.code === account.code);
+      if (existingAccount) {
+        results.push(`Existing account ${account.code} (${existingAccount.name}) already exists with balance of ${formatCurrency(account.normalBalance ?? 0, userConfig)}, skipping.`);
+        continue accountLoop;
+      } else {
+        await repo.addAccount(account.code, account.name, account.normalBalance);
+        results.push(`New account ${account.code} (${account.name}) has been created.`);
+      }
+    }
+
     return {
       content: [{
         type: 'text',
-        text: `Account ${params.code} added.`,
+        text: results.join('\n'),
       }],
-      // Provide structuredContent because an (empty) outputSchema was declared;
-      // this satisfies SDK validation which requires structured content when an output schema exists.
-      structuredContent: {
-        code: params.code,
-        name: params.name,
-        normalBalance: params.normalBalance,
-      },
     };
   });
 
-  // Implement the rest of the accounting tools using the McpServer API
-  server.registerTool('account.setName', {
-    title: 'Set account name',
+  server.registerTool('rename_account', {
+    title: 'Change an account name',
     description: "Set an account's display name.",
     inputSchema: { code: z.number(), name: z.string() },
   }, async function (params) {
-    await repo.setAccountName(params.code, params.name);
-    return { content: [{ type: 'text', text: 'OK' }] };
+    const existingAccount = await repo.getAccountByCode(params.code);
+    if (!existingAccount) {
+      return { content: [{ type: 'text', text: `Account with code ${params.code} does not exist.` }] };
+    }
+    try {
+      await repo.setAccountName(params.code, params.name);
+    }
+    catch (error) {
+      return { content: [{ type: 'text', text: `Error renaming account: ${(error as Error).message}` }] };
+    }
+    return { content: [{ type: 'text', text: `Account ${params.code} renamed from "${existingAccount.name}" to "${params.name}".` }] };
   });
 
-  server.registerTool('account.setControl', {
+  server.registerTool('set_control_account', {
     title: 'Set control account',
-    description: "Set an account's control account code.",
-    inputSchema: { code: z.number(), controlAccountCode: z.number() },
+    description: 'Control account determines the account hierarchy and reporting structure.',
+    inputSchema: {
+      accountCode: z.number(),
+      controlAccountCode: z.number(),
+    },
   }, async function (params) {
-    await repo.setControlAccount(params.code, params.controlAccountCode);
-    return { content: [{ type: 'text', text: 'OK' }] };
+    const account = await repo.getAccountByCode(params.accountCode);
+    if (!account) {
+      return { content: [{ type: 'text', text: `Account with code ${params.accountCode} does not exist.` }] };
+    }
+    const controlAccount = await repo.getAccountByCode(params.controlAccountCode);
+    if (!controlAccount) {
+      return { content: [{ type: 'text', text: `Control account with code ${params.controlAccountCode} does not exist.` }] };
+    }
+    if (params.accountCode === params.controlAccountCode) {
+      return { content: [{ type: 'text', text: 'An account cannot be its own control account.' }] };
+    }
+    try {
+      await repo.setControlAccount(params.accountCode, params.controlAccountCode);
+    }
+    catch (error) {
+      return { content: [{ type: 'text', text: `Error setting control account: ${(error as Error)?.message}` }] };
+    }
+    return { content: [{ type: 'text', text: `Account ${params.accountCode} (${account.name}) control account set to ${params.controlAccountCode} (${controlAccount.name}).` }] };
   });
 
-  server.registerTool('account.getHierarchy', {
+  server.registerTool('get_hierarchical_chart_of_accounts', {
     title: 'Get hierarchical chart of accounts',
     description: 'Return a hierarchical chart of accounts.',
     inputSchema: {},
   }, async function () {
-    const data = await repo.getHierarchicalChartOfAccounts();
-    return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+    const userConfig = await repo.getUserConfig();
+    const chartOfAccountToAsciiHierarchy = function (account: ChartOfAccount): AsciiHierarcy {
+      return {
+        label: `${account.code} ${account.name} (Balance: ${formatCurrency(account.balance ?? 0, userConfig)})`,
+        children: account.children ? account.children.map(chartOfAccountToAsciiHierarchy) : [],
+      };
+    };
+    const roots = await repo.getHierarchicalChartOfAccounts();
+    const asciiHierarchyNode = {
+      label: 'Chart of Accounts',
+      children: roots.map(chartOfAccountToAsciiHierarchy),
+    };
+    const asciiHierarchy = renderAsciiHierarchy(asciiHierarchyNode, '', false, true);
+    return { content: [{ type: 'text', text: asciiHierarchy }] };
   });
 
-  server.registerTool('account.getByCode', {
-    title: 'Get account by code',
-    description: 'Lookup an account by numeric code.',
-    inputSchema: { code: z.number() },
-  }, async function (params) {
-    const data = await repo.getAccountByCode(params.code);
-    return { content: [{ type: 'text', text: data ? JSON.stringify(data, null, 2) : 'Not found' }] };
-  });
-
-  server.registerTool('account.getByName', {
-    title: 'Get account by name',
-    description: 'Lookup an account by name.',
-    inputSchema: { name: z.string() },
-  }, async function (params) {
-    const data = await repo.getAccountByName(params.name);
-    return { content: [{ type: 'text', text: data ? JSON.stringify(data, null, 2) : 'Not found' }] };
-  });
-
-  server.registerTool('account.listByTag', {
-    title: 'List accounts by tag',
-    description: 'Return a paginated list of accounts for a given tag.',
-    inputSchema: { tag: z.string(), offset: z.number().optional(), limit: z.number().optional() },
-  }, async function (params) {
-    const offset = params.offset ?? 0;
-    const limit = params.limit ?? 100;
-    const data = await repo.getAccountsByTag(params.tag, offset, limit);
-    return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-  });
-
-  server.registerTool('account.setTag', {
-    title: 'Set account tag',
-    description: 'Assign a tag to an account.',
-    inputSchema: { code: z.number(), tag: z.string() },
-  }, async function (params) {
-    await repo.setAccountTag(params.code, params.tag);
-    return { content: [{ type: 'text', text: 'OK' }] };
-  });
-
-  server.registerTool('account.unsetTag', {
-    title: 'Unset account tag',
-    description: 'Remove a tag from an account.',
-    inputSchema: { code: z.number(), tag: z.string() },
-  }, async function (params) {
-    await repo.unsetAccountTag(params.code, params.tag);
-    return { content: [{ type: 'text', text: 'OK' }] };
-  });
-
-  server.registerTool('journal.draft', {
-    title: 'Draft journal entry',
-    description: 'Create a draft journal entry with lines.',
+  server.registerTool('get_many_accounts', {
+    title: 'Get many accounts',
+    description: 'Fetch multiple accounts by their codes, names, tags, or account control code. The query is inclusive OR across the provided filters.',
     inputSchema: {
-      entryTime: z.number(),
-      description: z.string().nullable().optional(),
-      lines: z.array(z.object({ accountCode: z.number(), debit: z.number(), credit: z.number() })),
+      codes: z.array(z.number()).optional(),
+      names: z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
+      controlAccountCodes: z.number().optional(),
     },
   }, async function (params) {
-    const lines = params.lines as Array<{ accountCode: number; debit: number; credit: number }>;
-    const id = await repo.draftJournalEntry({ entryTime: params.entryTime, description: params.description ?? null, lines });
-    return { content: [{ type: 'text', text: JSON.stringify({ ref: id }) }] };
+    if ((!params.codes || params.codes.length === 0) &&
+      (!params.names || params.names.length === 0) &&
+      (!params.tags || params.tags.length === 0) &&
+      !params.controlAccountCodes) {
+      return { content: [{ type: 'text', text: 'No filters provided, please specify at least one of codes, names, tags, or controlAccountCodes.' }] };
+    }
+    const userConfig = await repo.getUserConfig();
+    const accounts = await repo.getManyAccounts({
+      codes: params.codes,
+      names: params.names,
+      tags: params.tags,
+      controlAccountCodes: params.controlAccountCodes ? [params.controlAccountCodes] : undefined,
+    });
+    if (accounts.length === 0) {
+      return { content: [{ type: 'text', text: 'No accounts found matching the provided filters.' }] };
+    }
+    const lines = accounts.map(a => `${a.code} ${a.name} (Balance: ${formatCurrency(a.balance ?? 0, userConfig)})`);
+    return { content: [{ type: 'text', text: lines.join('\n') }] };
   });
 
-  server.registerTool('journal.addLine', {
-    title: 'Add journal entry line',
-    description: 'Add a line to an existing (draft) journal entry. Uses the auto-numbering view.',
+  server.registerTool('set_many_account_tags', {
+    title: 'Set many account tags',
+    description: 'Set tags for multiple accounts. Each account can have multiple tags.',
+    inputSchema: {
+      taggedAccounts: z.array(z.object({
+        code: z.number(),
+        tag: z.string(),
+      })),
+    },
+  }, async function (params) {
+    if (params.taggedAccounts.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'No tagged accounts provided, nothing to do.' }],
+      };
+    }
+
+    try {
+      await repo.setManyAccountTags(params.taggedAccounts.map(ta => ({ accountCode: ta.code, tag: ta.tag })));
+      const results = params.taggedAccounts.map(ta => `Account ${ta.code} tagged with "${ta.tag}".`);
+      return {
+        content: [{
+          type: 'text',
+          text: results.join('\n'),
+        }],
+      };
+    }
+    catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error setting account tags: ${(error as Error).message}` }],
+      };
+    }
+  });
+
+  server.registerTool('unset_many_account_tags', {
+    title: 'Unset many account tags',
+    description: 'Remove tags from multiple accounts.',
+    inputSchema: {
+      taggedAccounts: z.array(z.object({
+        code: z.number(),
+        tag: z.string(),
+      })),
+    },
+  }, async function (params) {
+    if (params.taggedAccounts.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'No tagged accounts provided, nothing to do.' }],
+      };
+    }
+
+    try {
+      await repo.unsetManyAccountTags(params.taggedAccounts.map(ta => ({ accountCode: ta.code, tag: ta.tag })));
+      const results = params.taggedAccounts.map(ta => `Tag "${ta.tag}" removed from account ${ta.code}.`);
+      return {
+        content: [{
+          type: 'text',
+          text: results.join('\n'),
+        }],
+      };
+    }
+    catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error unsetting account tags: ${(error as Error).message}` }],
+      };
+    }
+  });
+
+  server.registerTool('draft_journal_entry', {
+    title: 'Draft journal entry',
+    description: 'Create a draft journal entry with specified date, description, and lines. Returns the journal entry reference number.',
+    inputSchema: {
+      date: z.string(),
+      description: z.string(),
+      lines: z.array(z.object({
+        accountCode: z.number(),
+        amount: z.number(),
+        type: z.enum(['debit', 'credit']),
+      })),
+    },
+  }, async function (params) {
+    if (params.lines.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'No journal entry lines provided.' }],
+      };
+    }
+
+    try {
+      const entryTime = new Date(params.date).getTime();
+      const journalLines = params.lines.map(line => ({
+        accountCode: line.accountCode,
+        debit: line.type === 'debit' ? line.amount : 0,
+        credit: line.type === 'credit' ? line.amount : 0,
+      }));
+
+      const journalEntryRef = await repo.draftJournalEntry({
+        entryTime,
+        description: params.description,
+        lines: journalLines,
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Draft journal entry created with reference ${journalEntryRef}.`,
+        }],
+      };
+    }
+    catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error creating draft journal entry: ${(error as Error).message}` }],
+      };
+    }
+  });
+
+  server.registerTool('update_journal_entry', {
+    title: 'Update journal entry',
+    description: 'Update an existing journal entry with new date, description, and/or lines.',
     inputSchema: {
       journalEntryRef: z.number(),
-      accountCode: z.number(),
-      debit: z.number(),
-      credit: z.number(),
-      description: z.string().nullable().optional(),
-      reference: z.string().nullable().optional(),
+      date: z.string(),
+      description: z.string(),
+      lines: z.array(z.object({
+        accountCode: z.number(),
+        amount: z.number(),
+        type: z.enum(['debit', 'credit']),
+      })),
     },
   }, async function (params) {
-    await repo.sql`
-      INSERT INTO journal_entry_line_auto_number (journal_entry_ref, account_code, debit, credit, description, reference)
-      VALUES (${params.journalEntryRef}, ${params.accountCode}, ${params.debit}, ${params.credit}, ${params.description ?? null}, ${params.reference ?? null})
-    `;
-    return { content: [{ type: 'text', text: 'OK' }] };
+    try {
+      const entryTime = new Date(params.date).getTime();
+      const journalLines = params.lines.map(line => ({
+        accountCode: line.accountCode,
+        debit: line.type === 'debit' ? line.amount : 0,
+        credit: line.type === 'credit' ? line.amount : 0,
+      }));
+
+      await repo.updateJournalEntry(params.journalEntryRef, {
+        entryTime,
+        description: params.description,
+        lines: journalLines,
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Journal entry ${params.journalEntryRef} updated successfully.`,
+        }],
+      };
+    }
+    catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error updating journal entry: ${(error as Error).message}` }],
+      };
+    }
   });
 
-  server.registerTool('journal.post', {
+  server.registerTool('post_journal_entry', {
     title: 'Post journal entry',
-    description: 'Set the post_time on a journal entry, causing it to be posted.',
-    inputSchema: { ref: z.number(), postTime: z.number() },
-  }, async function (params) {
-    await repo.postJournalEntry(params.ref, params.postTime);
-    return { content: [{ type: 'text', text: 'OK' }] };
-  });
-
-  server.registerTool('report.generate', {
-    title: 'Generate financial report',
-    description: 'Create a balance report snapshot (trial balance & balance sheet) for a given report time.',
-    inputSchema: { reportTime: z.number() },
-  }, async function (params) {
-    const id = await repo.generateFinancialReport(params.reportTime);
-    return { content: [{ type: 'text', text: JSON.stringify({ id }) }] };
-  });
-
-  server.registerTool('report.trialBalance', {
-    title: 'Get trial balance snapshot',
-    description: 'Return a trial balance snapshot by report time.',
-    inputSchema: { reportTime: z.number() },
-  }, async function (params) {
-    const data = await repo.getTrialBalanceReport(params.reportTime);
-    return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-  });
-
-  server.registerTool('report.balanceSheet', {
-    title: 'Get balance sheet snapshot',
-    description: 'Return a balance sheet snapshot by report time.',
-    inputSchema: { reportTime: z.number() },
-  }, async function (params) {
-    const data = await repo.getBalanceSheetReport(params.reportTime);
-    return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-  });
-
-  server.registerTool('sql.query', {
-    title: 'Execute SQL query',
-    description:
-      'Execute a custom SQL query against the accounting database. For best results: MCP clients should first fetch the `sqlite-accounting-schema://schema` resource and include its URI in the `schemaUri` parameter so the LLM has a precise schema reference when generating SQL.',
+    description: 'Post a draft journal entry to make it final. Optionally specify a post date (defaults to current date).',
     inputSchema: {
-      sql: z.string(),
-      params: z.array(z.unknown()).optional(),
-      // Optional URI pointing to the schema resource previously fetched by the client
-      schemaUri: z.string().optional(),
+      journalEntryRef: z.number(),
+      date: z.string().optional(),
     },
   }, async function (params) {
-    // If client didn't provide a schemaUri, include a hint in the response so UI/clients know to fetch it
-    const warnings: string[] = [];
-    if (!params.schemaUri) {
-      warnings.push(
-        'Warning: For accurate SQL generation, clients should fetch sqlite-accounting-schema://schema and provide its URI as `schemaUri` when calling this tool.'
-      );
+    try {
+      const postTime = params.date ? new Date(params.date).getTime() : Date.now();
+      await repo.postJournalEntry(params.journalEntryRef, postTime);
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Journal entry ${params.journalEntryRef} posted successfully.`,
+        }],
+      };
     }
-
-    const data = await repo.sqlQuery(params.sql, params.params);
-
-    // Build content: optional warnings, query results, and a reference to the schema resource when provided
-    const content: any[] = [];
-    for (const w of warnings) content.push({ type: 'text', text: w });
-    content.push({ type: 'text', text: JSON.stringify(data, null, 2) });
-    if (params.schemaUri) {
-      // Provide a resource_link so clients / UIs can show the schema as a linked reference
-      content.push({
-        type: 'resource_link',
-        uri: params.schemaUri,
-        name: 'sqlite-accounting-schema',
-        mimeType: 'text/sql',
-        description: 'Database schema used as reference',
-      });
-    } else {
-      // Always include the canonical schema resource link so clients can fetch it if needed
-      content.push({
-        type: 'resource_link',
-        uri: 'sqlite-accounting-schema://schema',
-        name: 'sqlite-accounting-schema',
-        mimeType: 'text/sql',
-        description: 'Canonical database schema (fetch and supply as schemaUri for better LLM results)',
-      });
+    catch (error) {
+      return {
+        content: [{ type: 'text', text: `Error posting journal entry: ${(error as Error).message}` }],
+      };
     }
+  });
 
-    return { content };
+  server.registerTool('execute_sql_query', {
+    title: 'Execute SQL query',
+    description: 'Execute a raw SQL query against the accounting database. The sqlite-accounting-schema://schema resource should be provided as context/reference when generating queries to ensure correct table structure and column names.',
+    inputSchema: {
+      query: z.string(),
+      params: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+    },
+  }, async function (params) {
+    try {
+      const results = await repo.rawSql(params.query, params.params);
+      
+      if (results.length === 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: 'Query executed successfully, but returned no results.',
+          }],
+        };
+      }
+
+      // Format results as ASCII table
+      const headers = Object.keys(results[0]);
+      const rows = results.map(row => Object.values(row).map(val => String(val)));
+      const table = renderAsciiTable(headers, rows);
+      
+      return {
+        content: [{
+          type: 'text',
+          text: `Query executed successfully. Results:\n${table}`,
+        }],
+      };
+    }
+    catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Error executing SQL query: ${(error as Error).message}`,
+        }],
+      };
+    }
   });
 
   return server;

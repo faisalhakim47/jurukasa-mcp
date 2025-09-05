@@ -9,7 +9,10 @@
   "license": "FSL-1.1-MIT",
   "type": "module",
   "bin": "dist/cli.js",
-  "main": "dist/cli.js",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc --project ./tsconfig.json && tsc-alias -p ./tsconfig.json && cp ./app/data/*.sql ./dist/data/",
     "test": "node --test"

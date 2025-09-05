@@ -96,6 +96,55 @@ export async function runAccountingRepositoryTestSuite(
         strictEqual(b?.balance, 100);
       });
 
+      it('should update journal entry before posting', async function () {
+        // create accounts
+        await repo.addAccount(2100, 'Cash C', 'debit');
+        await repo.addAccount(3100, 'Revenue C', 'credit');
+        await repo.addAccount(2200, 'Bank D', 'debit');
+
+        const originalTime = Date.now() - 1000;
+        const updatedTime = Date.now();
+
+        // draft initial entry
+        const entryId = await repo.draftJournalEntry({
+          entryTime: originalTime,
+          description: 'Original entry',
+          lines: [
+            { accountCode: 2100, debit: 50, credit: 0 },
+            { accountCode: 3100, debit: 0, credit: 50 },
+          ],
+        });
+
+        // update the entry with new time, description and lines
+        await repo.updateJournalEntry(entryId, {
+          entryTime: updatedTime,
+          description: 'Updated entry',
+          lines: [
+            { accountCode: 2200, debit: 75, credit: 0 },
+            { accountCode: 3100, debit: 0, credit: 75 },
+          ],
+        });
+
+        // post the updated entry
+        await repo.postJournalEntry(entryId, updatedTime);
+
+        // verify the accounts have the updated amounts
+        const cashC = await repo.getAccountByCode(2100);
+        const bankD = await repo.getAccountByCode(2200);
+        const revenueC = await repo.getAccountByCode(3100);
+
+        strictEqual(cashC?.balance, 0); // should be 0, not affected by updated entry
+        strictEqual(bankD?.balance, 75); // should have the updated amount
+        strictEqual(revenueC?.balance, 75); // should have the updated amount
+
+        // verify the journal entry details via raw SQL
+        const entryRows = await repo.sqlQuery('SELECT entry_time, note FROM journal_entry WHERE ref = ?', [entryId]);
+        strictEqual(entryRows.length, 1);
+        const entry = entryRows[0] as any;
+        strictEqual(entry.entry_time, updatedTime);
+        strictEqual(entry.note, 'Updated entry');
+      });
+
       it('should generate trial balance and balance sheet reports', async function () {
         const reportTime = Date.now();
 
@@ -146,6 +195,44 @@ export async function runAccountingRepositoryTestSuite(
       it('should return null for unknown account lookups', async function () {
         const missing = await repo.getAccountByCode(999999);
         strictEqual(missing, null);
+      });
+    });
+
+    describe('getManyAccounts (inclusive OR filters)', function () {
+      it('returns accounts matching codes, names, tags, or controlAccountCodes', async function () {
+        // create accounts
+        await repo.addAccount(4000, 'Cash', 'debit');
+        await repo.addAccount(5000, 'Receivable', 'debit');
+        await repo.addAccount(6000, 'Equity', 'credit');
+
+        // tagging and parent-child relationship
+        await repo.setAccountTag(4000, 'Asset');
+        await repo.setAccountTag(6000, 'Equity');
+        await repo.setControlAccount(5000, 6000);
+
+        // filter by codes
+        let res = await repo.getManyAccounts({ codes: [4000] });
+        strictEqual(res.length, 1);
+        strictEqual(res[0].code, 4000);
+
+        // filter by names
+        res = await repo.getManyAccounts({ names: ['Receivable'] });
+        strictEqual(res.length, 1);
+        strictEqual(res[0].code, 5000);
+
+        // filter by tags
+        res = await repo.getManyAccounts({ tags: ['Asset'] });
+        strictEqual(res.length, 1);
+        strictEqual(res[0].code, 4000);
+
+        // filter by control account codes (should return children)
+        res = await repo.getManyAccounts({ controlAccountCodes: [6000] });
+        strictEqual(res.length, 1);
+        strictEqual(res[0].code, 5000);
+
+        // inclusive OR across filters: even if codes don't match, tag should match
+        res = await repo.getManyAccounts({ codes: [9999], tags: ['Equity'] });
+        strictEqual(res.findIndex(r => r.code === 6000) !== -1, true);
       });
     });
 
