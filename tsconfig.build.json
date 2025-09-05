@@ -4,8 +4,7 @@
     "outDir": "./dist",
     "declaration": true,
     "sourceMap": true,
-    "incremental": true,
-    "tsBuildInfoFile": "./.tsbuildinfo"
+    "incremental": false
   },
   "include": [
     "./app/**/*.ts"
