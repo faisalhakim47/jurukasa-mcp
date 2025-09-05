@@ -75,8 +75,8 @@ suite('AccountManagementMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
 
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('Existing account 100') && responseText.includes('already exists'), 'should skip existing account');
-      ok(responseText.includes('New account 400') && responseText.includes('has been created'), 'should create new account');
+      ok(responseText.includes('Existing account 100') && responseText.includes('already exists') && responseText.includes('normal balance debit'), 'should skip existing account');
+      ok(responseText.includes('New account 400') && responseText.includes('has been created') && responseText.includes('normal balance debit'), 'should create new account');
 
       // Verify the new account was actually created correctly
       const verifyRes = await client.callTool({
@@ -84,7 +84,7 @@ suite('AccountManagementMCPTools', function () {
         arguments: { codes: [400] },
       });
       const verifyText = (verifyRes.content[0] as { text: string }).text;
-      ok(verifyText.includes('400') && verifyText.includes('Expenses'), 'new account should exist');
+      ok(verifyText.includes('400') && verifyText.includes('Expenses') && verifyText.includes('Normal: debit'), 'new account should exist');
     });
 
     it('handles empty accounts list', async function () {
@@ -125,9 +125,9 @@ suite('AccountManagementMCPTools', function () {
         arguments: { codes: [110, 210, 410] },
       });
       const verifyText = (verifyRes.content[0] as { text: string }).text;
-      ok(verifyText.includes('110') && verifyText.includes('Accounts Receivable'), 'should include AR account');
-      ok(verifyText.includes('210') && verifyText.includes('Accounts Payable'), 'should include AP account');
-      ok(verifyText.includes('410') && verifyText.includes('Sales Revenue'), 'should include Revenue account');
+      ok(verifyText.includes('110') && verifyText.includes('Accounts Receivable') && verifyText.includes('Normal: debit'), 'should include AR account');
+      ok(verifyText.includes('210') && verifyText.includes('Accounts Payable') && verifyText.includes('Normal: credit'), 'should include AP account');
+      ok(verifyText.includes('410') && verifyText.includes('Sales Revenue') && verifyText.includes('Normal: credit'), 'should include Revenue account');
     });
   });
 
@@ -142,7 +142,7 @@ suite('AccountManagementMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
 
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('Account 100 renamed') && responseText.includes('Cash Account'), 'should confirm rename');
+      ok(responseText.includes('Account 100 renamed') && responseText.includes('Cash Account') && responseText.includes('Normal balance: debit'), 'should confirm rename');
 
       // Verify the account was actually renamed
       const verifyRes = await client.callTool({
@@ -150,7 +150,7 @@ suite('AccountManagementMCPTools', function () {
         arguments: { codes: [100] },
       });
       const verifyText = (verifyRes.content[0] as { text: string }).text;
-      ok(verifyText.includes('100') && verifyText.includes('Cash Account'), 'account should have new name');
+      ok(verifyText.includes('100') && verifyText.includes('Cash Account') && verifyText.includes('Normal: debit'), 'account should have new name');
     });
 
     it('fails for non-existing account', async function () {
@@ -178,7 +178,7 @@ suite('AccountManagementMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
 
       const responseText = (res.content[0] as { text: string }).text;
-      strictEqual(responseText, 'Account 100 (Cash) control account set to 200 (Revenue).');
+      strictEqual(responseText, 'Account 100 (Cash, normal balance: debit) control account set to 200 (Revenue, normal balance: credit).');
     });
 
     it('fails for non-existing account', async function () {
@@ -233,9 +233,9 @@ suite('AccountManagementMCPTools', function () {
 
       const responseText = (res.content[0] as { text: string }).text;
       ok(responseText.includes('Chart of Accounts'), 'should have proper title');
-      ok(responseText.includes('100') && responseText.includes('Cash'), 'should include account 100');
-      ok(responseText.includes('200') && responseText.includes('Revenue'), 'should include account 200');
-      ok(responseText.includes('300') && responseText.includes('Equity'), 'should include account 300');
+      ok(responseText.includes('100') && responseText.includes('Cash') && responseText.includes('Normal: debit'), 'should include account 100');
+      ok(responseText.includes('200') && responseText.includes('Revenue') && responseText.includes('Normal: credit'), 'should include account 200');
+      ok(responseText.includes('300') && responseText.includes('Equity') && responseText.includes('Normal: credit'), 'should include account 300');
     });
   });
 
@@ -250,8 +250,8 @@ suite('AccountManagementMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
 
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('100') && responseText.includes('Cash'), 'should include account 100');
-      ok(responseText.includes('200') && responseText.includes('Revenue'), 'should include account 200');
+      ok(responseText.includes('100') && responseText.includes('Cash') && responseText.includes('Normal: debit'), 'should include account 100');
+      ok(responseText.includes('200') && responseText.includes('Revenue') && responseText.includes('Normal: credit'), 'should include account 200');
       ok(!responseText.includes('300'), 'should not include account 300');
     });
 
@@ -265,7 +265,7 @@ suite('AccountManagementMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
 
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('100') && responseText.includes('Cash'), 'should include Cash account');
+      ok(responseText.includes('100') && responseText.includes('Cash') && responseText.includes('Normal: debit'), 'should include Cash account');
       ok(!responseText.includes('Revenue') && !responseText.includes('Equity'), 'should not include other accounts');
     });
 

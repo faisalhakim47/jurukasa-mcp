@@ -75,7 +75,7 @@ suite('ReportingMCPTools', function () {
     });
 
     const draftText = (draftRes.content[0] as { text: string }).text;
-    const refMatch = draftText.match(/reference (\d+)/);
+    const refMatch = draftText.match(/ref (\d+)/);
     assertDefined(refMatch, 'Should extract journal entry reference');
     const entryRef = parseInt(refMatch[1]);
 

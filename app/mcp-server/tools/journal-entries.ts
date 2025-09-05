@@ -33,7 +33,7 @@ export function defineDraftJournalEntryMCPTool(server: McpServer, repo: Accounti
       return {
         content: [{
           type: 'text',
-          text: `Draft journal entry created with reference ${journalEntryRef} for date ${params.date}.`,
+          text: `Draft journal entry created with ref ${journalEntryRef} for date ${params.date}.`,
         }],
       };
     }
@@ -48,7 +48,7 @@ export function defineDraftJournalEntryMCPTool(server: McpServer, repo: Accounti
 export function defineUpdateJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('updateJournalEntry', {
     title: 'Update journal entry',
-    description: 'Update an existing journal entry with new date, description, and/or lines.',
+    description: 'Update an existing journal entry draft with new date, description, and/or lines.',
     inputSchema: {
       journalEntryRef: z.number(),
       date: z.string(),
@@ -127,7 +127,7 @@ export function defineDeleteManyJournalEntryDraftsMCPTool(server: McpServer, rep
   }, async function (params) {
     if (params.journalEntryRefs.length === 0) {
       return {
-        content: [{ type: 'text', text: 'No journal entry references provided, nothing to delete.' }],
+        content: [{ type: 'text', text: 'No journal entry refs provided, nothing to delete.' }],
       };
     }
 
@@ -166,7 +166,7 @@ export function defineReverseJournalEntryMCPTool(server: McpServer, repo: Accoun
       return {
         content: [{
           type: 'text',
-          text: `Reversal journal entry created with reference ${reversalRef} for original entry ${params.journalEntryRef}.`,
+          text: `Reversal journal entry created with ref ${reversalRef} for original entry ${params.journalEntryRef}.`,
         }],
       };
     }

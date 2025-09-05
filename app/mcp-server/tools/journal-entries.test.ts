@@ -77,11 +77,11 @@ suite('JournalEntriesMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
       
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('Draft journal entry created with reference'), 'should confirm creation');
+      ok(responseText.includes('Draft journal entry created with ref'), 'should confirm creation');
       ok(responseText.includes('2024-01-01'), 'should include date');
       
       // Extract the reference number
-      const refMatch = responseText.match(/reference (\d+)/);
+      const refMatch = responseText.match(/ref (\d+)/);
       assertDefined(refMatch, 'Should extract journal entry reference');
       const entryRef = parseInt(refMatch[1]);
       ok(entryRef > 0, 'Should have a valid reference number');
@@ -101,7 +101,7 @@ suite('JournalEntriesMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
       
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('Draft journal entry created with reference'), 'should confirm creation');
+      ok(responseText.includes('Draft journal entry created with ref'), 'should confirm creation');
     });
   });
 
@@ -122,7 +122,7 @@ suite('JournalEntriesMCPTools', function () {
         },
       });
       const draftText = (draftRes.content[0] as { text: string }).text;
-      const refMatch = draftText.match(/reference (\d+)/);
+      const refMatch = draftText.match(/ref (\d+)/);
       assertDefined(refMatch, 'Should extract journal entry reference');
       journalEntryRef = parseInt(refMatch[1]);
     });
@@ -187,7 +187,7 @@ suite('JournalEntriesMCPTools', function () {
         },
       });
       const draftText = (draftRes.content[0] as { text: string }).text;
-      const refMatch = draftText.match(/reference (\d+)/);
+      const refMatch = draftText.match(/ref (\d+)/);
       assertDefined(refMatch, 'Should extract journal entry reference');
       journalEntryRef = parseInt(refMatch[1]);
     });
@@ -258,8 +258,8 @@ suite('JournalEntriesMCPTools', function () {
         },
       });
 
-      const ref1Match = (draft1Res.content[0] as { text: string }).text.match(/reference (\d+)/);
-      const ref2Match = (draft2Res.content[0] as { text: string }).text.match(/reference (\d+)/);
+      const ref1Match = (draft1Res.content[0] as { text: string }).text.match(/ref (\d+)/);
+      const ref2Match = (draft2Res.content[0] as { text: string }).text.match(/ref (\d+)/);
       assertDefined(ref1Match, 'Should extract first reference');
       assertDefined(ref2Match, 'Should extract second reference');
       const ref1 = parseInt(ref1Match[1]);
@@ -288,7 +288,7 @@ suite('JournalEntriesMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
       
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('No journal entry references provided, nothing to delete'), 'should handle empty list');
+      ok(responseText.includes('No journal entry refs provided, nothing to delete'), 'should handle empty list');
     });
   });
 
@@ -309,7 +309,7 @@ suite('JournalEntriesMCPTools', function () {
         },
       });
       const draftText = (draftRes.content[0] as { text: string }).text;
-      const refMatch = draftText.match(/reference (\d+)/);
+      const refMatch = draftText.match(/ref (\d+)/);
       assertDefined(refMatch, 'Should extract journal entry reference');
       journalEntryRef = parseInt(refMatch[1]);
       
@@ -334,7 +334,7 @@ suite('JournalEntriesMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
       
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('Reversal journal entry created with reference'), 'should confirm reversal creation');
+      ok(responseText.includes('Reversal journal entry created with ref'), 'should confirm reversal creation');
       ok(responseText.includes(`for original entry ${journalEntryRef}`), 'should reference original entry');
     });
 

@@ -30,11 +30,11 @@ export function defineEnsureManyAccountsExistMCPTool(server: McpServer, repo: Ac
     for (const account of params.accounts) {
       const existingAccount = existingAccounts.find(a => a.code === account.code);
       if (existingAccount) {
-        results.push(`Existing account ${account.code} (${existingAccount.name}) already exists with balance of ${formatCurrency(account.normalBalance ?? 0, userConfig)}, skipping.`);
+        results.push(`Existing account ${account.code} (${existingAccount.name}) already exists with balance of ${formatCurrency(existingAccount.balance ?? 0, userConfig)} and normal balance ${existingAccount.normalBalance}, skipping.`);
         continue accountLoop;
       } else {
         await repo.addAccount(account.code, account.name, account.normalBalance);
-        results.push(`New account ${account.code} (${account.name}) has been created.`);
+        results.push(`New account ${account.code} (${account.name}) has been created with normal balance ${account.normalBalance}.`);
       }
     }
 
@@ -63,7 +63,7 @@ export function defineRenameAccountMCPTool(server: McpServer, repo: AccountingRe
     catch (error) {
       return { content: [{ type: 'text', text: `Error renaming account: ${(error as Error).message}` }] };
     }
-    return { content: [{ type: 'text', text: `Account ${params.code} renamed from "${existingAccount.name}" to "${params.name}".` }] };
+    return { content: [{ type: 'text', text: `Account ${params.code} renamed from "${existingAccount.name}" to "${params.name}". Normal balance: ${existingAccount.normalBalance}.` }] };
   });
 }
 
@@ -93,7 +93,7 @@ export function defineSetControlAccountMCPTool(server: McpServer, repo: Accounti
     catch (error) {
       return { content: [{ type: 'text', text: `Error setting control account: ${(error as Error)?.message}` }] };
     }
-    return { content: [{ type: 'text', text: `Account ${params.accountCode} (${account.name}) control account set to ${params.controlAccountCode} (${controlAccount.name}).` }] };
+    return { content: [{ type: 'text', text: `Account ${params.accountCode} (${account.name}, normal balance: ${account.normalBalance}) control account set to ${params.controlAccountCode} (${controlAccount.name}, normal balance: ${controlAccount.normalBalance}).` }] };
   });
 }
 
@@ -106,7 +106,7 @@ export function defineGetHierarchicalChartOfAccountsMCPTool(server: McpServer, r
     const userConfig = await repo.getUserConfig();
     const chartOfAccountToAsciiHierarchy = function (account: ChartOfAccount): AsciiHierarcy {
       return {
-        label: `${account.code} ${account.name} (Balance: ${formatCurrency(account.balance ?? 0, userConfig)})`,
+        label: `${account.code} ${account.name} (Balance: ${formatCurrency(account.balance ?? 0, userConfig)}, Normal: ${account.normalBalance})`,
         children: account.children ? account.children.map(chartOfAccountToAsciiHierarchy) : [],
       };
     };
@@ -141,7 +141,7 @@ export function defineGetManyAccountsMCPTool(server: McpServer, repo: Accounting
     if (accounts.length === 0) {
       return { content: [{ type: 'text', text: 'No accounts found matching the provided filters.' }] };
     }
-    const lines = accounts.map(a => `${a.code} ${a.name} (Balance: ${formatCurrency(a.balance ?? 0, userConfig)})`);
+    const lines = accounts.map(a => `${a.code} ${a.name} (Balance: ${formatCurrency(a.balance ?? 0, userConfig)}, Normal: ${a.normalBalance})`);
     return { content: [{ type: 'text', text: lines.join('\n') }] };
   });
 }
