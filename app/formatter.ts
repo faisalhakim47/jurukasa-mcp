@@ -15,23 +15,35 @@ export type AsciiHierarcy = {
   children?: Array<AsciiHierarcy>;
 };
 
-export function renderAsciiHierarchy(node: AsciiHierarcy, prefix: string, isLast: boolean, isRoot: boolean = true): string {
+export function renderAsciiHierarchy(node: AsciiHierarcy, prefix: string = '', isLast: boolean = true, isRoot: boolean = true): string {
   const lines: string[] = [];
-  let connector = '';
+  
+  // Add the current node
   if (isRoot) {
-    connector = '';
-  } else if (prefix === '' && isLast) {
-    connector = '└── ';
+    // Root node - no connector
+    lines.push(node.label);
   } else {
-    connector = isLast ? '└─ ' : '├─ ';
+    // Child node - add connector
+    const connector = isLast ? '└── ' : '├── ';
+    lines.push(`${prefix}${connector}${node.label}`);
   }
-  lines.push(`${prefix}${connector}${node.label}`);
 
-  const newPrefix = prefix + (isLast ? '' : '│  ');
+  // Render children
   if (node.children) {
     node.children.forEach((child, index) => {
       const childIsLast = index === node.children!.length - 1;
-      lines.push(renderAsciiHierarchy(child, newPrefix, childIsLast, false));
+      
+      // Calculate prefix for the child
+      let childPrefix: string;
+      if (isRoot) {
+        // Root's children: start with empty prefix
+        childPrefix = '';
+      } else {
+        // Deeper children: extend the current prefix
+        childPrefix = prefix + (isLast ? '    ' : '│   ');
+      }
+      
+      lines.push(renderAsciiHierarchy(child, childPrefix, childIsLast, false));
     });
   }
 

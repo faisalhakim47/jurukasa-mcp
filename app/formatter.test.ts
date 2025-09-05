@@ -25,13 +25,13 @@ suite('formatter', function () {
 
       const expectedOutput =
 `Root
-├─ Child 1
-├─ Child 2
-│  ├─ Grandchild 1
-│  └─ Grandchild 2
+├── Child 1
+├── Child 2
+│   ├── Grandchild 1
+│   └── Grandchild 2
 └── Child 3`;
 
-      const result = renderAsciiHierarchy(node, '', true);
+      const result = renderAsciiHierarchy(node);
 
       equal(result, expectedOutput);
 

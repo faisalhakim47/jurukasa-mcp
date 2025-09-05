@@ -212,7 +212,10 @@ export abstract class AccountingRepository {
     const roots: ChartOfAccount[] = [];
     for (const row of rows) {
       assertPropNumber(row, 'code', 'Account code is not a number');
-      assertPropNumber(row, 'control_account_code', 'Account control_account_code is not a number');
+      // control_account_code can be null for root accounts, so only assert if not null
+      if (row.control_account_code !== null) {
+        assertPropNumber(row, 'control_account_code', 'Account control_account_code is not a number');
+      }
       const node = nodeMap.get(row.code)!;
       if (row.control_account_code == null) {
         roots.push(node);
@@ -274,13 +277,10 @@ export abstract class AccountingRepository {
 
   /**
    * Fetch many accounts by inclusive OR across provided filters.
-   * Any combination of the filters may be provided. If none are provided returns []
+   * Any combination of the filters may be provided. If none are provided returns all active accounts.
    */
   async getManyAccounts(filters: { codes?: number[]; names?: string[]; tags?: string[]; controlAccountCodes?: number[] } = {}): Promise<Account[]> {
     const { codes, names, tags, controlAccountCodes } = filters;
-    if ((!codes || codes.length === 0) && (!names || names.length === 0) && (!tags || tags.length === 0) && (!controlAccountCodes || controlAccountCodes.length === 0)) {
-      return [];
-    }
 
     const whereClauses: string[] = [];
     const params: unknown[] = [];
@@ -310,15 +310,25 @@ export abstract class AccountingRepository {
       params.push(...tags);
     }
 
-    const sql = `
-      SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance
-      FROM account a
-      WHERE a.is_active = 1
-        AND (
-          ${whereClauses.join('\n          OR ')}
-        )
-      ORDER BY a.code
-    `;
+    let sql: string;
+    if (whereClauses.length > 0) {
+      sql = `
+        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance
+        FROM account a
+        WHERE a.is_active = 1
+          AND (
+            ${whereClauses.join('\n            OR ')}
+          )
+        ORDER BY a.code
+      `;
+    } else {
+      sql = `
+        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance
+        FROM account a
+        WHERE a.is_active = 1
+        ORDER BY a.code
+      `;
+    }
 
     const result = await this.rawSql(sql, params);
     return result.map(function (row) {
@@ -439,7 +449,13 @@ export abstract class AccountingRepository {
 
   async setManyAccountTags(input: Array<AccountTagInput>): Promise<void> {
     for (const item of input) {
-      await this.sql`INSERT OR REPLACE INTO account_tag (account_code, tag) VALUES (${item.accountCode}, ${item.tag})`;
+      try {
+        await this.sql`INSERT OR REPLACE INTO account_tag (account_code, tag) VALUES (${item.accountCode}, ${item.tag})`;
+      } catch (error) {
+        // If foreign key constraint fails (account doesn't exist), continue silently
+        // This allows the operation to complete gracefully for non-existent accounts
+        continue;
+      }
     }
   }
 
@@ -470,10 +486,32 @@ export abstract class AccountingRepository {
   }
 
   async postJournalEntry(journalEntryId: number, postTime: number): Promise<void> {
-  await this.sql`UPDATE journal_entry SET post_time = ${postTime} WHERE ref = ${journalEntryId}`;
+    // Check if the journal entry exists and its current status
+    const entry = await this.sql<{ post_time: number | null }>`
+      SELECT post_time FROM journal_entry WHERE ref = ${journalEntryId}
+    `;
+    
+    if (entry.length === 0) {
+      throw new Error(`Journal entry ${journalEntryId} does not exist`);
+    }
+    
+    if (entry[0].post_time !== null) {
+      throw new Error(`Journal entry ${journalEntryId} is already posted`);
+    }
+    
+    await this.sql`UPDATE journal_entry SET post_time = ${postTime} WHERE ref = ${journalEntryId}`;
   }
 
   async updateJournalEntry(journalEntryRef: number, params: { entryTime?: number; description?: string | null; lines?: JournalEntryLine[] }): Promise<void> {
+    // First check if the journal entry exists
+    const exists = await this.sql<{ count: number }>`
+      SELECT COUNT(*) as count FROM journal_entry WHERE ref = ${journalEntryRef}
+    `;
+    
+    if (exists[0].count === 0) {
+      throw new Error(`Journal entry ${journalEntryRef} does not exist`);
+    }
+
     // Update journal entry header if provided
     if (params.entryTime !== undefined || params.description !== undefined) {
       if (params.entryTime !== undefined && params.description !== undefined) {

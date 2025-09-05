@@ -290,6 +290,13 @@ export async function runAccountingRepositoryTestSuite(
         // inclusive OR across filters: even if codes don't match, tag should match
         res = await repo.getManyAccounts({ codes: [9999], tags: ['Equity'] });
         strictEqual(res.findIndex(r => r.code === 6000) !== -1, true);
+
+        // no filters should return all accounts
+        res = await repo.getManyAccounts({});
+        strictEqual(res.length, 3);
+        strictEqual(res.findIndex(r => r.code === 4000) !== -1, true);
+        strictEqual(res.findIndex(r => r.code === 5000) !== -1, true);
+        strictEqual(res.findIndex(r => r.code === 6000) !== -1, true);
       });
     });
 

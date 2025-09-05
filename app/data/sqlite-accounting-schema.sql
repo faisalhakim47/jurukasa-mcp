@@ -757,7 +757,7 @@ BEGIN
       ELSE 0 
     END AS credit
   FROM account a
-  WHERE a.is_active = 1 AND a.balance != 0;
+  WHERE a.is_active = 1;
 END; -- EOS
 
 -- ==========================================================================
@@ -831,7 +831,6 @@ BEGIN
   FROM account a
   JOIN account_tag at ON at.account_code = a.code
   WHERE a.is_active = 1 
-    AND a.balance != 0
     AND at.tag IN (
       'Balance Sheet - Current Asset', 'Balance Sheet - Non-Current Asset',
       'Balance Sheet - Current Liability', 'Balance Sheet - Non-Current Liability',

@@ -151,7 +151,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
       label: 'Chart of Accounts',
       children: roots.map(chartOfAccountToAsciiHierarchy),
     };
-    const asciiHierarchy = renderAsciiHierarchy(asciiHierarchyNode, '', false, true);
+    const asciiHierarchy = renderAsciiHierarchy(asciiHierarchyNode);
     return { content: [{ type: 'text', text: asciiHierarchy }] };
   });
 
@@ -165,12 +165,6 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
       controlAccountCodes: z.number().optional(),
     },
   }, async function (params) {
-    if ((!params.codes || params.codes.length === 0) &&
-      (!params.names || params.names.length === 0) &&
-      (!params.tags || params.tags.length === 0) &&
-      !params.controlAccountCodes) {
-      return { content: [{ type: 'text', text: 'No filters provided, please specify at least one of codes, names, tags, or controlAccountCodes.' }] };
-    }
     const userConfig = await repo.getUserConfig();
     const accounts = await repo.getManyAccounts({
       codes: params.codes,
@@ -196,9 +190,16 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     },
   }, async function (params) {
     if (params.taggedAccounts.length === 0) {
-      return {
-        content: [{ type: 'text', text: 'No tagged accounts provided, nothing to do.' }],
-      };
+      const allAccounts = await repo.getManyAccounts({});
+      if (allAccounts.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No accounts exist in the system. Consider setting up an initial chart of accounts using the ensure_many_accounts_exist tool.' }],
+        };
+      } else {
+        return {
+          content: [{ type: 'text', text: 'No tagged accounts provided, nothing to do.' }],
+        };
+      }
     }
 
     try {
@@ -264,12 +265,6 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
       })),
     },
   }, async function (params) {
-    if (params.lines.length === 0) {
-      return {
-        content: [{ type: 'text', text: 'No journal entry lines provided.' }],
-      };
-    }
-
     try {
       const entryTime = new Date(params.date).getTime();
       const journalLines = params.lines.map(line => ({
@@ -287,7 +282,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
       return {
         content: [{
           type: 'text',
-          text: `Draft journal entry created with reference ${journalEntryRef}.`,
+          text: `Draft journal entry created with reference ${journalEntryRef} for date ${params.date}.`,
         }],
       };
     }
@@ -479,7 +474,28 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
       line.accountName,
       formatCurrency(line.amount, userConfig),
     ]);
-    const table = renderAsciiTable(headers, rows);
+
+    // Calculate classification totals
+    const classificationTotals = new Map<string, number>();
+    for (const line of report.lines) {
+      const current = classificationTotals.get(line.classification) || 0;
+      classificationTotals.set(line.classification, current + line.amount);
+    }
+
+    // Add total rows for each classification
+    const totalRows: string[][] = [];
+    for (const [classification, total] of classificationTotals) {
+      totalRows.push([
+        `TOTAL ${classification.toUpperCase()}`,
+        '',
+        '',
+        '',
+        formatCurrency(total, userConfig),
+      ]);
+    }
+
+    const allRows = [...rows, ...totalRows];
+    const table = renderAsciiTable(headers, allRows);
 
     return {
       content: [{
