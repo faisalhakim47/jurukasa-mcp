@@ -504,12 +504,16 @@ export abstract class AccountingRepository {
 
   async updateJournalEntry(journalEntryRef: number, params: { entryTime?: number; description?: string | null; lines?: JournalEntryLine[] }): Promise<void> {
     // First check if the journal entry exists
-    const exists = await this.sql<{ count: number }>`
-      SELECT COUNT(*) as count FROM journal_entry WHERE ref = ${journalEntryRef}
+    const entry = await this.sql<{ post_time: number | null }>`
+      SELECT post_time FROM journal_entry WHERE ref = ${journalEntryRef}
     `;
     
-    if (exists[0].count === 0) {
+    if (entry.length === 0) {
       throw new Error(`Journal entry ${journalEntryRef} does not exist`);
+    }
+    
+    if (entry[0].post_time !== null) {
+      throw new Error(`Journal entry ${journalEntryRef} is already posted and cannot be updated`);
     }
 
     // Update journal entry header if provided

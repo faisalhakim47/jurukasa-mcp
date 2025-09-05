@@ -46,7 +46,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   );
 
-  server.registerTool('ensure_many_accounts_exist', {
+  server.registerTool('ensureManyAccountsExist', {
     title: 'Ensure many accounts exist',
     description: 'Check that multiple accounts exist by each code, creating any that are missing. This tool does not update existing accounts.',
     inputSchema: {
@@ -88,7 +88,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     };
   });
 
-  server.registerTool('rename_account', {
+  server.registerTool('renameAccount', {
     title: 'Change an account name',
     description: "Set an account's display name.",
     inputSchema: { code: z.number(), name: z.string() },
@@ -106,7 +106,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     return { content: [{ type: 'text', text: `Account ${params.code} renamed from "${existingAccount.name}" to "${params.name}".` }] };
   });
 
-  server.registerTool('set_control_account', {
+  server.registerTool('setControlAccount', {
     title: 'Set control account',
     description: 'Control account determines the account hierarchy and reporting structure.',
     inputSchema: {
@@ -134,7 +134,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     return { content: [{ type: 'text', text: `Account ${params.accountCode} (${account.name}) control account set to ${params.controlAccountCode} (${controlAccount.name}).` }] };
   });
 
-  server.registerTool('get_hierarchical_chart_of_accounts', {
+  server.registerTool('getHierarchicalChartOfAccounts', {
     title: 'Get hierarchical chart of accounts',
     description: 'Return a hierarchical chart of accounts.',
     inputSchema: {},
@@ -155,7 +155,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     return { content: [{ type: 'text', text: asciiHierarchy }] };
   });
 
-  server.registerTool('get_many_accounts', {
+  server.registerTool('getManyAccounts', {
     title: 'Get many accounts',
     description: 'Fetch multiple accounts by their codes, names, tags, or account control code. The query is inclusive OR across the provided filters.',
     inputSchema: {
@@ -179,7 +179,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     return { content: [{ type: 'text', text: lines.join('\n') }] };
   });
 
-  server.registerTool('set_many_account_tags', {
+  server.registerTool('setManyAccountTags', {
     title: 'Set many account tags',
     description: 'Set tags for multiple accounts. Each account can have multiple tags.',
     inputSchema: {
@@ -193,7 +193,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
       const allAccounts = await repo.getManyAccounts({});
       if (allAccounts.length === 0) {
         return {
-          content: [{ type: 'text', text: 'No accounts exist in the system. Consider setting up an initial chart of accounts using the ensure_many_accounts_exist tool.' }],
+          content: [{ type: 'text', text: 'No accounts exist in the system. Consider setting up an initial chart of accounts using the ensureManyAccountsExist tool.' }],
         };
       } else {
         return {
@@ -219,7 +219,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  server.registerTool('unset_many_account_tags', {
+  server.registerTool('unsetManyAccountTags', {
     title: 'Unset many account tags',
     description: 'Remove tags from multiple accounts.',
     inputSchema: {
@@ -252,7 +252,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  server.registerTool('draft_journal_entry', {
+  server.registerTool('draftJournalEntry', {
     title: 'Draft journal entry',
     description: 'Create a draft journal entry with specified date, description, and lines. Returns the journal entry reference number.',
     inputSchema: {
@@ -293,7 +293,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  server.registerTool('update_journal_entry', {
+  server.registerTool('updateJournalEntry', {
     title: 'Update journal entry',
     description: 'Update an existing journal entry with new date, description, and/or lines.',
     inputSchema: {
@@ -335,7 +335,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  server.registerTool('post_journal_entry', {
+  server.registerTool('postJournalEntry', {
     title: 'Post journal entry',
     description: 'Post a draft journal entry to make it final. Optionally specify a post date (defaults to current date).',
     inputSchema: {
@@ -361,7 +361,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  server.registerTool('delete_many_journal_entry_drafts', {
+  server.registerTool('deleteManyJournalEntryDrafts', {
     title: 'Delete many journal entry drafts',
     description: 'Delete multiple draft journal entries that have not been posted yet.',
     inputSchema: {
@@ -391,7 +391,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  server.registerTool('reverse_journal_entry', {
+  server.registerTool('reverseJournalEntry', {
     title: 'Reverse journal entry',
     description: 'Create a reversal journal entry for a posted journal entry. The reversal will swap debits and credits of the original entry.',
     inputSchema: {
@@ -418,7 +418,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     }
   });
 
-  server.registerTool('get_latest_trial_balance', {
+  server.registerTool('getLatestTrialBalance', {
     title: 'Get latest trial balance',
     description: 'Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).',
     inputSchema: {
@@ -451,7 +451,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     };
   });
 
-  server.registerTool('get_latest_balance_sheet', {
+  server.registerTool('getLatestBalanceSheet', {
     title: 'Get latest balance sheet',
     description: 'Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).',
     inputSchema: {
@@ -505,7 +505,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     };
   });
 
-  server.registerTool('generate_financial_report', {
+  server.registerTool('generateFinancialReport', {
     title: 'Generate financial report',
     description: 'Generate Trial Balance and Balance Sheet snapshots for the current date/time.',
     inputSchema: {},
@@ -521,7 +521,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
     };
   });
 
-  server.registerTool('execute_sql_query', {
+  server.registerTool('executeSqlQuery', {
     title: 'Execute SQL query',
     description: 'Execute a raw SQL query against the accounting database. The sqlite-accounting-schema://schema resource should be provided as context/reference when generating queries to ensure correct table structure and column names.',
     inputSchema: {
