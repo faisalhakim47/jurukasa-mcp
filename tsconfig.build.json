@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "declaration": true,
+    "sourceMap": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./.tsbuildinfo"
+  },
+  "include": [
+    "./app/**/*.ts"
+  ],
+  "exclude": [
+    "./app/**/*test-suite.ts",
+    "./app/**/*.test.ts",
+    "dist",
+    "node_modules"
+  ]
+}
