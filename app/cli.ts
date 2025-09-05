@@ -3,8 +3,8 @@
 import { argv, env, stderr } from 'node:process';
 
 import { AccountingRepository } from '@app/data/accounting-repository.js';
-import { createAccountingMcpServer } from '@app/accounting-mcp-server.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createAccountingMcpServer } from '@app/mcp-server/mcp-server.js';
 
 const [, , databaseUrlArg, databaseAuthTokenArg] = argv;
 
