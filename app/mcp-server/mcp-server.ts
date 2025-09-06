@@ -21,6 +21,7 @@ import {
   defineGetLatestTrialBalanceMCPTool 
 } from '@app/mcp-server/tools/reporting.js';
 import { defineExecuteSqlQueryMCPTool } from '@app/mcp-server/tools/sql-execution.js';
+import { defineSetConfigMCPTool, defineGetConfigMCPTool } from '@app/mcp-server/tools/config.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 export function createAccountingMcpServer(repo: AccountingRepository): McpServer {
@@ -58,6 +59,10 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
 
   // Register SQL execution tool
   defineExecuteSqlQueryMCPTool(server, repo);
+
+  // Register config tool
+  defineSetConfigMCPTool(server, repo);
+  defineGetConfigMCPTool(server, repo);
 
   return server;
 }

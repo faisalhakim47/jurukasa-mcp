@@ -242,6 +242,129 @@ export async function runAccountingRepositoryTestSuite(
       });
     });
 
+    describe('journal entries with idempotentKey', function () {
+      it('should handle idempotent draft journal entries', async function () {
+        await repo.addAccount(8000, 'Cash ID', 'debit');
+        await repo.addAccount(9000, 'Revenue ID', 'credit');
+
+        const now = Date.now();
+        const idempotentKey = 'test-key-' + now;
+
+        // Create first entry with idempotent key
+        const entryId1 = await repo.draftJournalEntry({
+          entryTime: now,
+          description: 'First entry',
+          lines: [
+            { accountCode: 8000, debit: 100, credit: 0 },
+            { accountCode: 9000, debit: 0, credit: 100 },
+          ],
+          idempotentKey,
+        });
+
+        // Create second entry with same idempotent key - should return same ID
+        const entryId2 = await repo.draftJournalEntry({
+          entryTime: now,
+          description: 'Duplicate entry',
+          lines: [
+            { accountCode: 8000, debit: 200, credit: 0 },
+            { accountCode: 9000, debit: 0, credit: 200 },
+          ],
+          idempotentKey,
+        });
+
+        strictEqual(entryId1, entryId2, 'Should return same entry ID for same idempotent key');
+
+        // Post the entry and verify balances
+        await repo.postJournalEntry(entryId1, now);
+        const cashAccount = await repo.getAccountByCode(8000);
+        const revenueAccount = await repo.getAccountByCode(9000);
+        
+        // Should have the first entry's amounts, not the second
+        strictEqual(cashAccount?.balance, 100, 'Should have first entry amount');
+        strictEqual(revenueAccount?.balance, 100, 'Should have first entry amount');
+      });
+
+      it('should allow updating idempotentKey in journal entries', async function () {
+        await repo.addAccount(8100, 'Cash Update', 'debit');
+        await repo.addAccount(9100, 'Revenue Update', 'credit');
+
+        const now = Date.now();
+        const entryId = await repo.draftJournalEntry({
+          entryTime: now,
+          description: 'Initial entry',
+          lines: [
+            { accountCode: 8100, debit: 50, credit: 0 },
+            { accountCode: 9100, debit: 0, credit: 50 },
+          ],
+        });
+
+        const newIdempotentKey = 'updated-key-' + now;
+        await repo.updateJournalEntry(entryId, {
+          idempotentKey: newIdempotentKey,
+        });
+
+        // Verify the key was updated by trying to create another entry with the same key
+        const duplicateId = await repo.draftJournalEntry({
+          entryTime: now + 1000,
+          description: 'Should be duplicate',
+          lines: [
+            { accountCode: 8100, debit: 75, credit: 0 },
+            { accountCode: 9100, debit: 0, credit: 75 },
+          ],
+          idempotentKey: newIdempotentKey,
+        });
+
+        strictEqual(entryId, duplicateId, 'Should return same entry ID for updated idempotent key');
+      });
+
+      it('should handle idempotent reversal journal entries', async function () {
+        await repo.addAccount(8200, 'Cash Reversal', 'debit');
+        await repo.addAccount(9200, 'Revenue Reversal', 'credit');
+
+        const now = Date.now();
+        const originalRef = await repo.draftJournalEntry({
+          entryTime: now,
+          description: 'Original entry for reversal',
+          lines: [
+            { accountCode: 8200, debit: 150, credit: 0 },
+            { accountCode: 9200, debit: 0, credit: 150 },
+          ],
+        });
+
+        await repo.postJournalEntry(originalRef, now);
+
+        const reversalTime = now + 1000;
+        const reversalIdempotentKey = 'reversal-key-' + now;
+
+        // Create first reversal with idempotent key
+        const reversalRef1 = await repo.reverseJournalEntry(
+          originalRef, 
+          reversalTime, 
+          'First reversal',
+          reversalIdempotentKey
+        );
+
+        // Create second reversal with same idempotent key - should return same ID
+        const reversalRef2 = await repo.reverseJournalEntry(
+          originalRef, 
+          reversalTime, 
+          'Duplicate reversal',
+          reversalIdempotentKey
+        );
+
+        strictEqual(reversalRef1, reversalRef2, 'Should return same reversal ID for same idempotent key');
+
+        // Post the reversal and verify balances
+        await repo.postJournalEntry(reversalRef1, reversalTime);
+        const cashAccount = await repo.getAccountByCode(8200);
+        const revenueAccount = await repo.getAccountByCode(9200);
+        
+        strictEqual(cashAccount?.balance, 0, 'Cash balance should be zero after reversal');
+        strictEqual(revenueAccount?.balance, 0, 'Revenue balance should be zero after reversal');
+      });
+
+    });
+
     describe('sql helpers and not-found behaviors', function () {
       it('sqlQuery should proxy to rawSql', async function () {
         const rows = await repo.sqlQuery('SELECT 1 as v', []);

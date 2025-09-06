@@ -6,7 +6,7 @@ import z from 'zod/v3';
 export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('getLatestTrialBalance', {
     title: 'Get latest trial balance',
-    description: 'Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).',
+    description: 'Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (yyyy-mm-dd HH:mm:ss).',
     inputSchema: {
       fromDate: z.string().optional(),
     },
@@ -41,7 +41,7 @@ export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: Acco
 export function defineGetLatestBalanceSheetMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('getLatestBalanceSheet', {
     title: 'Get latest balance sheet',
-    description: 'Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (YYYY-MM-DD HH:MM:SS).',
+    description: 'Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (yyyy-mm-dd HH:mm:ss).',
     inputSchema: {
       fromDate: z.string().optional(),
     },

@@ -5,7 +5,7 @@ import z from 'zod/v3';
 export function defineDraftJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('draftJournalEntry', {
     title: 'Draft journal entry',
-    description: 'Create a draft journal entry with specified date, description, and lines. Returns the journal entry reference number.',
+    description: 'Create a draft journal entry with specified date, description, and lines. Returns the journal entry reference number. Date is in ISO format (yyyy-mm-dd HH:mm:ss). Optionally provide an idempotentKey to prevent duplicate entries.',
     inputSchema: {
       date: z.string(),
       description: z.string(),
@@ -14,6 +14,7 @@ export function defineDraftJournalEntryMCPTool(server: McpServer, repo: Accounti
         amount: z.number(),
         type: z.enum(['debit', 'credit']),
       })),
+      idempotentKey: z.string().optional(),
     },
   }, async function (params) {
     try {
@@ -28,6 +29,7 @@ export function defineDraftJournalEntryMCPTool(server: McpServer, repo: Accounti
         entryTime,
         description: params.description,
         lines: journalLines,
+        idempotentKey: params.idempotentKey,
       });
 
       return {
@@ -48,7 +50,7 @@ export function defineDraftJournalEntryMCPTool(server: McpServer, repo: Accounti
 export function defineUpdateJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('updateJournalEntry', {
     title: 'Update journal entry',
-    description: 'Update an existing journal entry draft with new date, description, and/or lines.',
+    description: 'Update an existing journal entry draft with new date, description, and/or lines. Date is in ISO format (yyyy-mm-dd HH:mm:ss). Optionally update the idempotentKey.',
     inputSchema: {
       journalEntryRef: z.number(),
       date: z.string(),
@@ -58,6 +60,7 @@ export function defineUpdateJournalEntryMCPTool(server: McpServer, repo: Account
         amount: z.number(),
         type: z.enum(['debit', 'credit']),
       })),
+      idempotentKey: z.string().optional(),
     },
   }, async function (params) {
     try {
@@ -72,6 +75,7 @@ export function defineUpdateJournalEntryMCPTool(server: McpServer, repo: Account
         entryTime,
         description: params.description,
         lines: journalLines,
+        idempotentKey: params.idempotentKey,
       });
 
       return {
@@ -92,7 +96,7 @@ export function defineUpdateJournalEntryMCPTool(server: McpServer, repo: Account
 export function definePostJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('postJournalEntry', {
     title: 'Post journal entry',
-    description: 'Post a draft journal entry to make it final. Optionally specify a post date (defaults to current date).',
+    description: 'Post a draft journal entry to make it final. Optionally specify a post date (defaults to current date). Date is in ISO format (yyyy-mm-dd HH:mm:ss).',
     inputSchema: {
       journalEntryRef: z.number(),
       date: z.string().optional(),
@@ -152,16 +156,22 @@ export function defineDeleteManyJournalEntryDraftsMCPTool(server: McpServer, rep
 export function defineReverseJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('reverseJournalEntry', {
     title: 'Reverse journal entry',
-    description: 'Create a reversal journal entry for a posted journal entry. The reversal will swap debits and credits of the original entry.',
+    description: 'Create a reversal journal entry for a posted journal entry. The reversal will swap debits and credits of the original entry. Date is in ISO format (yyyy-mm-dd HH:mm:ss). Optionally provide an idempotentKey to prevent duplicate reversals.',
     inputSchema: {
       journalEntryRef: z.number(),
       date: z.string(),
       description: z.string().optional(),
+      idempotentKey: z.string().optional(),
     },
   }, async function (params) {
     try {
       const reversalTime = new Date(params.date).getTime();
-      const reversalRef = await repo.reverseJournalEntry(params.journalEntryRef, reversalTime, params.description);
+      const reversalRef = await repo.reverseJournalEntry(
+        params.journalEntryRef, 
+        reversalTime, 
+        params.description,
+        params.idempotentKey
+      );
       
       return {
         content: [{

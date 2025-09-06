@@ -6,6 +6,7 @@ export type UserConfig = {
   currencyCode: string|null;
   currencyDecimalPlaces: number|null;
   locale?: string|null;
+  fiscalYearStartMonth?: number|null;
 };
 
 type Account = {
@@ -46,6 +47,7 @@ type DraftJournalEntryParams = {
   entryTime: number;
   description?: string | null;
   lines: JournalEntryLine[];
+  idempotentKey?: string | null;
 }
 
 type TrialBalanceReportLine = {
@@ -120,6 +122,15 @@ export abstract class AccountingRepository {
       } else if (row.key === 'Locale') {
         assertPropString(row, 'value', 'Locale value is not a string');
         config.locale = row.value;
+      } else if (row.key === 'Fiscal Year Start Month') {
+        // Handle both string and number values for compatibility
+        if (typeof row.value === 'number') {
+          config.fiscalYearStartMonth = row.value;
+        } else if (typeof row.value === 'string' && !isNaN(Number(row.value))) {
+          config.fiscalYearStartMonth = Number(row.value);
+        } else {
+          assertPropNumber(row, 'value', 'Fiscal Year Start Month value is not a number');
+        }
       }
     }
 
@@ -142,6 +153,9 @@ export abstract class AccountingRepository {
     }
     if (config.locale !== undefined) {
       await this.sql`INSERT OR REPLACE INTO user_config (key, value, created_at, updated_at) VALUES ('Locale', ${config.locale}, ${now}, ${now})`;
+    }
+    if (config.fiscalYearStartMonth !== undefined) {
+      await this.sql`INSERT OR REPLACE INTO user_config (key, value, created_at, updated_at) VALUES ('Fiscal Year Start Month', ${config.fiscalYearStartMonth}, ${now}, ${now})`;
     }
   }
 
@@ -466,9 +480,19 @@ export abstract class AccountingRepository {
   }
 
   async draftJournalEntry(params: DraftJournalEntryParams): Promise<number> {
+    // Check if an entry with the same idempotent key already exists
+    if (params.idempotentKey) {
+      const existingEntry = await this.sql<{ ref: number }>`
+        SELECT ref FROM journal_entry WHERE idempotent_key = ${params.idempotentKey}
+      `;
+      if (existingEntry.length > 0) {
+        return existingEntry[0].ref;
+      }
+    }
+
     const result = await this.sql<{ ref: number }>`
-      INSERT INTO journal_entry (entry_time, note, post_time)
-      VALUES (${params.entryTime}, ${params.description || null}, NULL)
+      INSERT INTO journal_entry (entry_time, note, post_time, idempotent_key)
+      VALUES (${params.entryTime}, ${params.description || null}, NULL, ${params.idempotentKey || null})
       RETURNING ref
     `;
     if (result.length === 0) {
@@ -502,7 +526,7 @@ export abstract class AccountingRepository {
     await this.sql`UPDATE journal_entry SET post_time = ${postTime} WHERE ref = ${journalEntryId}`;
   }
 
-  async updateJournalEntry(journalEntryRef: number, params: { entryTime?: number; description?: string | null; lines?: JournalEntryLine[] }): Promise<void> {
+  async updateJournalEntry(journalEntryRef: number, params: { entryTime?: number; description?: string | null; lines?: JournalEntryLine[]; idempotentKey?: string | null }): Promise<void> {
     // First check if the journal entry exists
     const entry = await this.sql<{ post_time: number | null }>`
       SELECT post_time FROM journal_entry WHERE ref = ${journalEntryRef}
@@ -517,13 +541,26 @@ export abstract class AccountingRepository {
     }
 
     // Update journal entry header if provided
-    if (params.entryTime !== undefined || params.description !== undefined) {
-      if (params.entryTime !== undefined && params.description !== undefined) {
-        await this.sql`UPDATE journal_entry SET entry_time = ${params.entryTime}, note = ${params.description} WHERE ref = ${journalEntryRef}`;
-      } else if (params.entryTime !== undefined) {
-        await this.sql`UPDATE journal_entry SET entry_time = ${params.entryTime} WHERE ref = ${journalEntryRef}`;
-      } else if (params.description !== undefined) {
-        await this.sql`UPDATE journal_entry SET note = ${params.description} WHERE ref = ${journalEntryRef}`;
+    if (params.entryTime !== undefined || params.description !== undefined || params.idempotentKey !== undefined) {
+      const updates = [];
+      const values = [];
+      
+      if (params.entryTime !== undefined) {
+        updates.push('entry_time = ?');
+        values.push(params.entryTime);
+      }
+      if (params.description !== undefined) {
+        updates.push('note = ?');
+        values.push(params.description);
+      }
+      if (params.idempotentKey !== undefined) {
+        updates.push('idempotent_key = ?');
+        values.push(params.idempotentKey);
+      }
+      
+      if (updates.length > 0) {
+        values.push(journalEntryRef);
+        await this.rawSql(`UPDATE journal_entry SET ${updates.join(', ')} WHERE ref = ?`, values);
       }
     }
 
@@ -563,7 +600,7 @@ export abstract class AccountingRepository {
     `, journalEntryRefs);
   }
 
-  async reverseJournalEntry(journalEntryRef: number, reversalTime: number, description?: string): Promise<number> {
+  async reverseJournalEntry(journalEntryRef: number, reversalTime: number, description?: string, reversalIdempotentKey?: string): Promise<number> {
     // Get the original journal entry
     const originalEntry = await this.sql<{ ref: number; entry_time: number; note: string | null }>`
       SELECT ref, entry_time, note 
@@ -596,6 +633,7 @@ export abstract class AccountingRepository {
       entryTime: reversalTime,
       description: reversalDescription,
       lines: reversalLines,
+      idempotentKey: reversalIdempotentKey,
     });
     
     // Update reversal references

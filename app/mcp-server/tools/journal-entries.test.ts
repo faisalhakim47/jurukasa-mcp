@@ -87,6 +87,55 @@ suite('JournalEntriesMCPTools', function () {
       ok(entryRef > 0, 'Should have a valid reference number');
     });
 
+    it('creates a draft journal entry with idempotentKey', async function () {
+      const idempotentKey = 'test-key-' + Date.now();
+      const res = await client.callTool({
+        name: 'draftJournalEntry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Test entry with idempotent key',
+          lines: [
+            { accountCode: 100, amount: 1000, type: 'debit' },
+            { accountCode: 200, amount: 1000, type: 'credit' },
+          ],
+          idempotentKey,
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Draft journal entry created with ref'), 'should confirm creation');
+      
+      // Extract the reference number
+      const refMatch = responseText.match(/ref (\d+)/);
+      assertDefined(refMatch, 'Should extract journal entry reference');
+      const entryRef1 = parseInt(refMatch[1]);
+
+      // Try to create the same entry again with the same idempotentKey
+      const res2 = await client.callTool({
+        name: 'draftJournalEntry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Test entry with idempotent key',
+          lines: [
+            { accountCode: 100, amount: 1000, type: 'debit' },
+            { accountCode: 200, amount: 1000, type: 'credit' },
+          ],
+          idempotentKey,
+        },
+      });
+      
+      const responseText2 = (res2.content[0] as { text: string }).text;
+      const refMatch2 = responseText2.match(/ref (\d+)/);
+      assertDefined(refMatch2, 'Should extract journal entry reference');
+      const entryRef2 = parseInt(refMatch2[1]);
+      
+      // Should return the same reference (idempotent behavior)
+      ok(entryRef1 === entryRef2, `Should return same ref: ${entryRef1} === ${entryRef2}`);
+    });
+
     it('handles empty lines', async function () {
       const res = await client.callTool({
         name: 'draftJournalEntry',
@@ -138,6 +187,29 @@ suite('JournalEntriesMCPTools', function () {
             { accountCode: 100, amount: 1000, type: 'debit' },
             { accountCode: 300, amount: 1000, type: 'credit' },
           ],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes(`Journal entry ${journalEntryRef} updated successfully`), 'should confirm update');
+    });
+
+    it('updates journal entry with idempotentKey', async function () {
+      const idempotentKey = 'update-test-key-' + Date.now();
+      const res = await client.callTool({
+        name: 'updateJournalEntry',
+        arguments: {
+          journalEntryRef,
+          date: '2024-01-02',
+          description: 'Updated entry with idempotent key',
+          lines: [
+            { accountCode: 100, amount: 1500, type: 'debit' },
+            { accountCode: 300, amount: 1500, type: 'credit' },
+          ],
+          idempotentKey,
         },
       });
       assertPropDefined(res, 'content');
@@ -336,6 +408,49 @@ suite('JournalEntriesMCPTools', function () {
       const responseText = (res.content[0] as { text: string }).text;
       ok(responseText.includes('Reversal journal entry created with ref'), 'should confirm reversal creation');
       ok(responseText.includes(`for original entry ${journalEntryRef}`), 'should reference original entry');
+    });
+
+    it('reverses a posted journal entry with idempotentKey', async function () {
+      const idempotentKey = 'reversal-test-key-' + Date.now();
+      const res = await client.callTool({
+        name: 'reverseJournalEntry',
+        arguments: {
+          journalEntryRef,
+          date: '2024-01-02',
+          description: 'Reversal with idempotent key',
+          idempotentKey,
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+      
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Reversal journal entry created with ref'), 'should confirm reversal creation');
+      
+      // Extract the reversal reference number
+      const refMatch = responseText.match(/created with ref (\d+)/);
+      assertDefined(refMatch, 'Should extract reversal reference');
+      const reversalRef1 = parseInt(refMatch[1]);
+
+      // Try to create the same reversal again with the same idempotentKey
+      const res2 = await client.callTool({
+        name: 'reverseJournalEntry',
+        arguments: {
+          journalEntryRef,
+          date: '2024-01-02',
+          description: 'Reversal with idempotent key',
+          idempotentKey,
+        },
+      });
+      
+      const responseText2 = (res2.content[0] as { text: string }).text;
+      const refMatch2 = responseText2.match(/created with ref (\d+)/);
+      assertDefined(refMatch2, 'Should extract reversal reference');
+      const reversalRef2 = parseInt(refMatch2[1]);
+      
+      // Should return the same reference (idempotent behavior)
+      ok(reversalRef1 === reversalRef2, `Should return same reversal ref: ${reversalRef1} === ${reversalRef2}`);
     });
 
     it('fails to reverse non-existent entry', async function () {

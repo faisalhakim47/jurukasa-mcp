@@ -39,7 +39,14 @@ BEGIN TRANSACTION; -- EOS
 
 -- User-specific configuration and metadata
 CREATE TABLE IF NOT EXISTS user_config (
-  key TEXT PRIMARY KEY CHECK (length(key) > 0),
+  key TEXT PRIMARY KEY CHECK (key IN (
+    'Business Name',
+    'Business Type',
+    'Currency Code',
+    'Currency Decimals',
+    'Locale',
+    'Fiscal Year Start Month'
+  )),
   value TEXT NOT NULL CHECK (length(value) >= 0),
   description TEXT,
   created_at INTEGER NOT NULL,
@@ -255,7 +262,8 @@ CREATE TABLE IF NOT EXISTS journal_entry (
   source_reference TEXT,
   created_by TEXT DEFAULT 'User' CHECK (created_by IN ('User', 'System', 'Migration')),
   reversal_of_ref INTEGER REFERENCES journal_entry (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
-  reversed_by_ref INTEGER REFERENCES journal_entry (ref) ON UPDATE RESTRICT ON DELETE RESTRICT
+  reversed_by_ref INTEGER REFERENCES journal_entry (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  idempotent_key TEXT
 ) STRICT; -- EOS
 
 CREATE INDEX IF NOT EXISTS journal_entry_entry_time_index ON journal_entry (entry_time); -- EOS
@@ -266,6 +274,7 @@ CREATE INDEX IF NOT EXISTS journal_entry_ref_post_time_index ON journal_entry(re
 CREATE INDEX IF NOT EXISTS journal_entry_fiscal_year_index ON journal_entry (fiscal_year_begin_time) WHERE fiscal_year_begin_time IS NOT NULL; -- EOS
 CREATE INDEX IF NOT EXISTS journal_entry_source_type_index ON journal_entry (source_type, entry_time); -- EOS
 CREATE INDEX IF NOT EXISTS journal_entry_reversal_index ON journal_entry (reversal_of_ref) WHERE reversal_of_ref IS NOT NULL; -- EOS
+CREATE UNIQUE INDEX IF NOT EXISTS journal_entry_idempotent_key_index ON journal_entry (idempotent_key) WHERE idempotent_key IS NOT NULL; -- EOS
 
 -- Journal entry validation trigger
 DROP TRIGGER IF EXISTS journal_entry_insert_validation_trigger; -- EOS
