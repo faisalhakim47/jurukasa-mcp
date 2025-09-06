@@ -21,6 +21,11 @@ export class SqliteAccountingRepository extends AccountingRepository {
     const schemaFiles = [
       join(__dirname, './sqlite-accounting-schema.sql'),
     ];
+    this.#db.exec('PRAGMA journal_mode = WAL;');
+    this.#db.exec('PRAGMA synchronous = FULL;');
+    this.#db.exec('PRAGMA temp_store = MEMORY;');
+    this.#db.exec('PRAGMA cache_size = -32000;');
+    this.#db.exec('PRAGMA mmap_size = 67108864;');
     for (const file of schemaFiles) {
       const schemaContent = await readFile(file, { encoding: 'utf-8' });
       const statements = schemaContent.split('-- EOS');

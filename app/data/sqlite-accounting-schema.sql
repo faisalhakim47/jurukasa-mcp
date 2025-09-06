@@ -23,12 +23,12 @@
 -- ==========================================================================
 
 -- Optimize for accounting operations
-PRAGMA journal_mode = WAL; -- EOS        -- Write-Ahead Logging for data safety
-PRAGMA synchronous = FULL; -- EOS        -- Strong data integrity
+-- PRAGMA journal_mode = WAL; -- EOS        -- Write-Ahead Logging for data safety
+-- PRAGMA synchronous = FULL; -- EOS        -- Strong data integrity
 PRAGMA foreign_keys = ON; -- EOS         -- Enforce referential integrity
-PRAGMA temp_store = MEMORY; -- EOS       -- Store temporary data in memory
-PRAGMA cache_size = -32000; -- EOS       -- 32MB cache (smaller than platform DB)
-PRAGMA mmap_size = 67108864; -- EOS      -- 64MB memory-mapped I/O (reduced for CI)
+-- PRAGMA temp_store = MEMORY; -- EOS       -- Store temporary data in memory
+-- PRAGMA cache_size = -32000; -- EOS       -- 32MB cache (smaller than platform DB)
+-- PRAGMA mmap_size = 67108864; -- EOS      -- 64MB memory-mapped I/O (reduced for CI)
 
 -- Start transaction for atomic migration
 BEGIN TRANSACTION; -- EOS
