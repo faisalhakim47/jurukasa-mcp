@@ -40,7 +40,7 @@ suite('AccountManagementMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'ensureManyAccountsExist',
+      name: 'manageManyAccounts',
       arguments: {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
@@ -59,10 +59,10 @@ suite('AccountManagementMCPTools', function () {
     await repo.close();
   });
 
-  describe('Tool: ensureManyAccountsExist', function () {
+  describe('Tool: manageManyAccounts', function () {
     it('creates new accounts and skips existing ones', async function () {
       const res = await client.callTool({
-        name: 'ensureManyAccountsExist',
+        name: 'manageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Cash', normalBalance: 'debit' },
@@ -89,7 +89,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('handles empty accounts list', async function () {
       const res = await client.callTool({
-        name: 'ensureManyAccountsExist',
+        name: 'manageManyAccounts',
         arguments: { accounts: [] },
       });
       assertPropDefined(res, 'content');
@@ -102,7 +102,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('creates accounts with different normal balances correctly', async function () {
       const res = await client.callTool({
-        name: 'ensureManyAccountsExist',
+        name: 'manageManyAccounts',
         arguments: {
           accounts: [
             { code: 110, name: 'Accounts Receivable', normalBalance: 'debit' },
@@ -221,10 +221,10 @@ suite('AccountManagementMCPTools', function () {
     });
   });
 
-  describe('Tool: getHierarchicalChartOfAccounts', function () {
+  describe('Tool: getChartOfAccounts', function () {
     it('returns hierarchical chart', async function () {
       const res = await client.callTool({
-        name: 'getHierarchicalChartOfAccounts',
+        name: 'getChartOfAccounts',
         arguments: {},
       });
       assertPropDefined(res, 'content');

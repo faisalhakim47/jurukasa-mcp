@@ -3,15 +3,16 @@ import { AsciiHierarcy, formatCurrency, renderAsciiHierarchy } from '@app/format
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
-export function defineEnsureManyAccountsExistMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('ensureManyAccountsExist', {
-    title: 'Ensure many accounts exist',
-    description: 'Check that multiple accounts exist by each code, creating any that are missing. This tool does not update existing accounts.',
+export function defineManageManyAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
+  server.registerTool('manageManyAccounts', {
+    title: 'Multi-purpose account management tools',
+    description: 'Use this tool to create and or update (upsert) multiple accounts at once.',
     inputSchema: {
       accounts: z.array(z.object({
         code: z.number(),
         name: z.string(),
         normalBalance: z.enum(['debit', 'credit']),
+        controlCode: z.number().optional().describe('Optional control account code to set the account hierarchy'),
       })),
     },
   }, async function (params) {
@@ -97,8 +98,8 @@ export function defineSetControlAccountMCPTool(server: McpServer, repo: Accounti
   });
 }
 
-export function defineGetHierarchicalChartOfAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getHierarchicalChartOfAccounts', {
+export function defineGetChartOfAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
+  server.registerTool('getChartOfAccounts', {
     title: 'Get hierarchical chart of accounts',
     description: 'Return a hierarchical chart of accounts.',
     inputSchema: {},
@@ -110,7 +111,7 @@ export function defineGetHierarchicalChartOfAccountsMCPTool(server: McpServer, r
         children: account.children ? account.children.map(chartOfAccountToAsciiHierarchy) : [],
       };
     };
-    const roots = await repo.getHierarchicalChartOfAccounts();
+    const roots = await repo.getChartOfAccounts();
     const asciiHierarchyNode = {
       label: 'Chart of Accounts',
       children: roots.map(chartOfAccountToAsciiHierarchy),
@@ -120,28 +121,3 @@ export function defineGetHierarchicalChartOfAccountsMCPTool(server: McpServer, r
   });
 }
 
-export function defineGetManyAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getManyAccounts', {
-    title: 'Get many accounts',
-    description: 'Fetch multiple accounts by their codes, names, tags, or account control code. The query is inclusive OR across the provided filters.',
-    inputSchema: {
-      codes: z.array(z.number()).optional(),
-      names: z.array(z.string()).optional(),
-      tags: z.array(z.string()).optional(),
-      controlAccountCodes: z.number().optional(),
-    },
-  }, async function (params) {
-    const userConfig = await repo.getUserConfig();
-    const accounts = await repo.getManyAccounts({
-      codes: params.codes,
-      names: params.names,
-      tags: params.tags,
-      controlAccountCodes: params.controlAccountCodes ? [params.controlAccountCodes] : undefined,
-    });
-    if (accounts.length === 0) {
-      return { content: [{ type: 'text', text: 'No accounts found matching the provided filters.' }] };
-    }
-    const lines = accounts.map(a => `${a.code} ${a.name} (Balance: ${formatCurrency(a.balance ?? 0, userConfig)}, Normal: ${a.normalBalance})`);
-    return { content: [{ type: 'text', text: lines.join('\n') }] };
-  });
-}

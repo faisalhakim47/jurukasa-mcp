@@ -2,10 +2,9 @@ import { AccountingRepository } from '@app/data/accounting-repository.js';
 import { defineSqliteAccountingSchemaMCPResource } from '@app/mcp-server/resources/sqlite-accounting-schema.js';
 import { defineSetManyAccountTagsMCPTool, defineUnsetManyAccountTagsMCPTool } from '@app/mcp-server/tools/account-tags.js';
 import { 
-  defineEnsureManyAccountsExistMCPTool,
-  defineGetHierarchicalChartOfAccountsMCPTool, 
-  defineGetManyAccountsMCPTool, 
-  defineRenameAccountMCPTool, 
+  defineManageManyAccountsMCPTool,
+  defineGetChartOfAccountsMCPTool,
+  defineRenameAccountMCPTool,
   defineSetControlAccountMCPTool 
 } from '@app/mcp-server/tools/account-management.js';
 import { 
@@ -35,11 +34,10 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
   defineSqliteAccountingSchemaMCPResource(server);
 
   // Register account management tools
-  defineEnsureManyAccountsExistMCPTool(server, repo);
+  defineManageManyAccountsMCPTool(server, repo);
   defineRenameAccountMCPTool(server, repo);
   defineSetControlAccountMCPTool(server, repo);
-  defineGetHierarchicalChartOfAccountsMCPTool(server, repo);
-  defineGetManyAccountsMCPTool(server, repo);
+  defineGetChartOfAccountsMCPTool(server, repo);
 
   // Register account tagging tools
   defineSetManyAccountTagsMCPTool(server, repo);

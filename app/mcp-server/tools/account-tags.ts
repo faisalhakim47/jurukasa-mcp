@@ -17,7 +17,7 @@ export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: Account
       const allAccounts = await repo.getManyAccounts({});
       if (allAccounts.length === 0) {
         return {
-          content: [{ type: 'text', text: 'No accounts exist in the system. Consider setting up an initial chart of accounts using the ensureManyAccountsExist tool.' }],
+          content: [{ type: 'text', text: 'No accounts exist in the system. Consider setting up an initial chart of accounts using the manageManyAccounts tool.' }],
         };
       } else {
         return {

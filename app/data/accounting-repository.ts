@@ -189,7 +189,7 @@ export abstract class AccountingRepository {
     await this.sql`UPDATE account SET control_account_code = ${controlAccountCode} WHERE code = ${code}`;
   }
 
-  async getHierarchicalChartOfAccounts(): Promise<ChartOfAccount[]> {
+  async getChartOfAccounts(): Promise<ChartOfAccount[]> {
     // Use a recursive CTE to walk the parent->child (control_account_code) relationships.
     // Start with top-level accounts (control_account_code IS NULL) and recurse to children.
     const rows = await this.sql`

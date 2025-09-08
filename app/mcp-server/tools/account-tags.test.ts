@@ -40,7 +40,7 @@ suite('AccountTagsMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'ensureManyAccountsExist',
+      name: 'manageManyAccounts',
       arguments: {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
