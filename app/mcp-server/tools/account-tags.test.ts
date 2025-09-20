@@ -80,7 +80,7 @@ suite('AccountTagsMCPTools', function () {
       
       // Verify tags were actually set by querying them
       const verifyRes = await client.callTool({
-        name: 'executeSqlQuery',
+        name: 'ExecuteSqlQuery',
         arguments: {
           query: 'SELECT account_code, tag FROM account_tag WHERE account_code IN (100, 200) ORDER BY account_code, tag',
         },
@@ -156,7 +156,7 @@ suite('AccountTagsMCPTools', function () {
       
       // Verify tags were actually removed
       const verifyRes = await client.callTool({
-        name: 'executeSqlQuery',
+        name: 'ExecuteSqlQuery',
         arguments: {
           query: 'SELECT account_code, tag FROM account_tag WHERE account_code IN (100, 200) ORDER BY account_code, tag',
         },

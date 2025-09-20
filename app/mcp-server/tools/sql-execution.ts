@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
 export function defineExecuteSqlQueryMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('executeSqlQuery', {
+  server.registerTool('ExecuteSqlQuery', {
     title: 'Execute SQL query',
     description: 'Execute a raw SQLite query against the accounting database. The sqlite-accounting-schema://schema resource must be provided as context/reference when generating queries to ensure correct table structure and column names.',
     inputSchema: {

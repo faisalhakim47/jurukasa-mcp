@@ -706,7 +706,7 @@ export abstract class AccountingRepository {
     return reversalRef;
   }
 
-  async generateFinancialReport(reportTime: number): Promise<number> {
+  async GenerateFinancialReport(reportTime: number): Promise<number> {
     const result = await this.sql<{ id: number }>`
       INSERT INTO balance_report (report_time, report_type, name, created_at)
       VALUES (${reportTime}, 'Ad Hoc', ${'Ad Hoc Report'}, ${reportTime})

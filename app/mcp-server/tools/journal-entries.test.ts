@@ -171,7 +171,7 @@ suite('JournalEntriesMCPTools', function () {
 
     it('reverses a posted journal entry', async function () {
       const res = await client.callTool({
-        name: 'reverseJournalEntry',
+        name: 'ReverseJournalEntry',
         arguments: {
           journalEntryRef,
           date: '2024-01-02',
@@ -197,7 +197,7 @@ suite('JournalEntriesMCPTools', function () {
       const idempotentKey = 'reversal-key-456';
 
       const res1 = await client.callTool({
-        name: 'reverseJournalEntry',
+        name: 'ReverseJournalEntry',
         arguments: {
           journalEntryRef,
           date: '2024-01-02',
@@ -214,7 +214,7 @@ suite('JournalEntriesMCPTools', function () {
       const originalReversalRef = refMatch[1];
 
       const res2 = await client.callTool({
-        name: 'reverseJournalEntry',
+        name: 'ReverseJournalEntry',
         arguments: {
           journalEntryRef,
           date: '2024-01-03',
@@ -232,7 +232,7 @@ suite('JournalEntriesMCPTools', function () {
       const nonExistentRef = 99999;
 
       const res = await client.callTool({
-        name: 'reverseJournalEntry',
+        name: 'ReverseJournalEntry',
         arguments: {
           journalEntryRef: nonExistentRef,
           date: '2024-01-02',

@@ -60,7 +60,7 @@ export function defineRecordJournalEntryMCPTool(server: McpServer, repo: Account
 }
 
 export function defineReverseJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('reverseJournalEntry', {
+  server.registerTool('ReverseJournalEntry', {
     title: 'Reverse journal entry',
     description: 'Create a reversal journal entry for a posted journal entry. The reversal will swap debits and credits of the original entry. Date is in ISO format (yyyy-mm-dd HH:mm:ss). Optionally provide an idempotentKey to prevent duplicate reversals.',
     inputSchema: {

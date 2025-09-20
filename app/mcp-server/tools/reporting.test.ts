@@ -87,10 +87,10 @@ suite('ReportingMCPTools', function () {
     await repo.close();
   });
 
-  describe('Tool: generateFinancialReport', function () {
+  describe('Tool: GenerateFinancialReport', function () {
     it('generates trial balance and balance sheet snapshots', async function () {
       const res = await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
       assertPropDefined(res, 'content');
@@ -110,7 +110,7 @@ suite('ReportingMCPTools', function () {
 
     it('creates separate trial balance and balance sheet reports', async function () {
       await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
       
@@ -135,7 +135,7 @@ suite('ReportingMCPTools', function () {
     beforeEach(async function () {
       // Generate a financial report to have trial balance data
       await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
     });
@@ -176,7 +176,7 @@ suite('ReportingMCPTools', function () {
     beforeEach(async function () {
       // Generate a financial report to have balance sheet data
       await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
     });
@@ -233,13 +233,52 @@ suite('ReportingMCPTools', function () {
       });
       const trialBalanceText = (trialBalanceRes.content[0] as { text: string }).text;
       ok(trialBalanceText.includes('No trial balance reports found'), 'should indicate no trial balance reports');
-      
+      ok(trialBalanceText.includes('ManageManyAccounts'), 'should suggest creating accounts');
+      ok(trialBalanceText.includes('GenerateFinancialReport'), 'should suggest generating financial report');
+
       const balanceSheetRes = await client.callTool({
         name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       const balanceSheetText = (balanceSheetRes.content[0] as { text: string }).text;
       ok(balanceSheetText.includes('No balance sheet reports found'), 'should indicate no balance sheet reports');
+      ok(balanceSheetText.includes('ManageManyAccounts'), 'should suggest creating accounts');
+      ok(balanceSheetText.includes('SetManyAccountTags'), 'should suggest tagging accounts');
+      ok(balanceSheetText.includes('GenerateFinancialReport'), 'should suggest generating financial report');
+    });
+  });
+
+  describe('Tool: ViewLatestTrialBalance and ViewLatestBalanceSheet - Empty Reports', function () {
+    beforeEach(async function () {
+      // Generate a financial report without any accounts to test empty report scenario
+      await client.callTool({
+        name: 'GenerateFinancialReport',
+        arguments: {},
+      });
+    });
+
+    it('returns helpful message for empty trial balance', async function () {
+      const trialBalanceRes = await client.callTool({
+        name: 'ViewLatestTrialBalance',
+        arguments: {},
+      });
+      const trialBalanceText = (trialBalanceRes.content[0] as { text: string }).text;
+      ok(trialBalanceText.includes('no accounts were found') || trialBalanceText.includes('Account Code'), 'should handle empty or populated trial balance');
+      if (trialBalanceText.includes('no accounts were found')) {
+        ok(trialBalanceText.includes('ManageManyAccounts'), 'should suggest creating accounts for empty trial balance');
+      }
+    });
+
+    it('returns helpful message for empty balance sheet', async function () {
+      const balanceSheetRes = await client.callTool({
+        name: 'ViewLatestBalanceSheet',
+        arguments: {},
+      });
+      const balanceSheetText = (balanceSheetRes.content[0] as { text: string }).text;
+      ok(balanceSheetText.includes('no balance sheet accounts were found') || balanceSheetText.includes('Classification'), 'should handle empty or populated balance sheet');
+      if (balanceSheetText.includes('no balance sheet accounts were found')) {
+        ok(balanceSheetText.includes('SetManyAccountTags'), 'should suggest tagging accounts for empty balance sheet');
+      }
     });
   });
 });

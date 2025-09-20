@@ -166,7 +166,7 @@ export async function runAccountingRepositoryTestSuite(
         });
         await repo.postJournalEntry(entryId, now);
 
-        const reportId = await repo.generateFinancialReport(reportTime);
+        const reportId = await repo.GenerateFinancialReport(reportTime);
         strictEqual(typeof reportId, 'number');
 
         const tb = await repo.getTrialBalanceReport(reportTime);
@@ -205,7 +205,7 @@ export async function runAccountingRepositoryTestSuite(
         });
         await repo.postJournalEntry(entryId, now);
 
-        const reportId = await repo.generateFinancialReport(reportTime);
+        const reportId = await repo.GenerateFinancialReport(reportTime);
         strictEqual(typeof reportId, 'number');
 
         // Test ViewLatestTrialBalance
@@ -423,7 +423,7 @@ export async function runAccountingRepositoryTestSuite(
       });
     });
 
-    describe('deleteManyJournalEntryDrafts and reverseJournalEntry', function () {
+    describe('deleteManyJournalEntryDrafts and ReverseJournalEntry', function () {
       it('should delete multiple draft journal entries', async function () {
         // Create accounts
         await repo.addAccount(7000, 'Cash Test', 'debit');
