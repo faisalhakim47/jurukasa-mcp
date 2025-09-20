@@ -1,21 +1,18 @@
 import { AccountingRepository } from '@app/data/accounting-repository.js';
 import { defineSqliteAccountingSchemaMCPResource } from '@app/mcp-server/resources/sqlite-accounting-schema.js';
-import { defineSetManyAccountTagsMCPTool, defineUnsetManyAccountTagsMCPTool } from '@app/mcp-server/tools/account-tags.js';
-import { 
+import { defineSetManyAccountTagsMCPTool, defineUnSetManyAccountTagsMCPTool } from '@app/mcp-server/tools/account-tags.js';
+import {
   defineManageManyAccountsMCPTool,
   defineViewChartOfAccountsMCPTool
 } from '@app/mcp-server/tools/account-management.js';
-import { 
-  defineDeleteManyJournalEntryDraftsMCPTool, 
-  defineDraftJournalEntryMCPTool, 
-  definePostJournalEntryMCPTool, 
-  defineReverseJournalEntryMCPTool, 
-  defineUpdateJournalEntryMCPTool 
+import {
+  defineRecordJournalEntryMCPTool,
+  defineReverseJournalEntryMCPTool,
 } from '@app/mcp-server/tools/journal-entries.js';
-import { 
-  defineGenerateFinancialReportMCPTool, 
-  defineGetLatestBalanceSheetMCPTool, 
-  defineGetLatestTrialBalanceMCPTool 
+import {
+  defineGenerateFinancialReportMCPTool,
+  defineGetLatestBalanceSheetMCPTool,
+  defineGetLatestTrialBalanceMCPTool
 } from '@app/mcp-server/tools/reporting.js';
 import { defineExecuteSqlQueryMCPTool } from '@app/mcp-server/tools/sql-execution.js';
 import { defineSetConfigMCPTool, defineGetConfigMCPTool } from '@app/mcp-server/tools/config.js';
@@ -37,13 +34,10 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
 
   // Register account tagging tools
   defineSetManyAccountTagsMCPTool(server, repo);
-  defineUnsetManyAccountTagsMCPTool(server, repo);
+  defineUnSetManyAccountTagsMCPTool(server, repo);
 
   // Register journal entry tools
-  defineDraftJournalEntryMCPTool(server, repo);
-  defineUpdateJournalEntryMCPTool(server, repo);
-  definePostJournalEntryMCPTool(server, repo);
-  defineDeleteManyJournalEntryDraftsMCPTool(server, repo);
+  defineRecordJournalEntryMCPTool(server, repo);
   defineReverseJournalEntryMCPTool(server, repo);
 
   // Register reporting tools

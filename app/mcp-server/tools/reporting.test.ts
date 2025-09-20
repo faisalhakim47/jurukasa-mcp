@@ -40,7 +40,7 @@ suite('ReportingMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'manageManyAccounts',
+      name: 'ManageManyAccounts',
       arguments: {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
@@ -52,9 +52,9 @@ suite('ReportingMCPTools', function () {
 
     // Tag accounts for balance sheet reporting
     await client.callTool({
-      name: 'setManyAccountTags',
+      name: 'SetManyAccountTags',
       arguments: {
-        taggedAccounts: [
+        accountTags: [
           { code: 100, tag: 'Balance Sheet - Current Asset' },
           { code: 300, tag: 'Balance Sheet - Equity' },
         ],
@@ -122,15 +122,14 @@ suite('ReportingMCPTools', function () {
       
       // Check that trial balance was created
       const trialBalanceRes = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       const trialBalanceText = (trialBalanceRes.content[0] as { text: string }).text;
       ok(!trialBalanceText.includes('No trial balance reports found'), 'should have trial balance report');
       
-      // Check that balance sheet was created
       const balanceSheetRes = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       const balanceSheetText = (balanceSheetRes.content[0] as { text: string }).text;
@@ -138,7 +137,7 @@ suite('ReportingMCPTools', function () {
     });
   });
 
-  describe('Tool: getLatestTrialBalance', function () {
+  describe('Tool: ViewLatestTrialBalance', function () {
     beforeEach(async function () {
       // Generate a financial report to have trial balance data
       await client.callTool({
@@ -149,7 +148,7 @@ suite('ReportingMCPTools', function () {
 
     it('returns the latest trial balance report', async function () {
       const res = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       assertPropDefined(res, 'content');
@@ -167,7 +166,7 @@ suite('ReportingMCPTools', function () {
 
     it('shows correct balances in trial balance', async function () {
       const res = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       
@@ -179,7 +178,7 @@ suite('ReportingMCPTools', function () {
     });
   });
 
-  describe('Tool: getLatestBalanceSheet', function () {
+  describe('Tool: ViewLatestBalanceSheet', function () {
     beforeEach(async function () {
       // Generate a financial report to have balance sheet data
       await client.callTool({
@@ -190,7 +189,7 @@ suite('ReportingMCPTools', function () {
 
     it('returns the latest balance sheet report', async function () {
       const res = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       assertPropDefined(res, 'content');
@@ -208,7 +207,7 @@ suite('ReportingMCPTools', function () {
 
     it('shows only balance sheet accounts', async function () {
       const res = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       
@@ -222,7 +221,7 @@ suite('ReportingMCPTools', function () {
 
     it('calculates totals for each classification', async function () {
       const res = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       
@@ -232,17 +231,17 @@ suite('ReportingMCPTools', function () {
     });
   });
 
-  describe('Tool: getLatestTrialBalance and getLatestBalanceSheet - No Reports', function () {
+  describe('Tool: ViewLatestTrialBalance and ViewLatestBalanceSheet - No Reports', function () {
     it('returns no reports when none exist', async function () {
       const trialBalanceRes = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       const trialBalanceText = (trialBalanceRes.content[0] as { text: string }).text;
       ok(trialBalanceText.includes('No trial balance reports found'), 'should indicate no trial balance reports');
       
       const balanceSheetRes = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       const balanceSheetText = (balanceSheetRes.content[0] as { text: string }).text;

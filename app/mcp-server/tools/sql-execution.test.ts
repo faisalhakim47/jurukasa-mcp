@@ -40,7 +40,7 @@ suite('SqlExecutionMCPTool', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'manageManyAccounts',
+      name: 'ManageManyAccounts',
       arguments: {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
@@ -146,9 +146,9 @@ suite('SqlExecutionMCPTool', function () {
     it('executes a query with JOIN', async function () {
       // First set up some tags
       await client.callTool({
-        name: 'setManyAccountTags',
+        name: 'SetManyAccountTags',
         arguments: {
-          taggedAccounts: [
+          accountTags: [
             { code: 100, tag: 'Asset' },
             { code: 200, tag: 'Revenue' },
           ],

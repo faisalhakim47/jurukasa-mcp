@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
 export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getLatestTrialBalance', {
+  server.registerTool('ViewLatestTrialBalance', {
     title: 'Get latest trial balance report',
     description: 'Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (yyyy-mm-dd HH:mm).',
     inputSchema: {
@@ -12,7 +12,7 @@ export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: Acco
     },
   }, async function (params) {
     const userConfig = await repo.getUserConfig();
-    const report = await repo.getLatestTrialBalance(params.fromDate);
+    const report = await repo.ViewLatestTrialBalance(params.fromDate);
     if (!report) {
       return {
         content: [{ type: 'text', text: 'No trial balance reports found.' }],
@@ -39,7 +39,7 @@ export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: Acco
 }
 
 export function defineGetLatestBalanceSheetMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getLatestBalanceSheet', {
+  server.registerTool('ViewLatestBalanceSheet', {
     title: 'Get latest balance sheet report',
     description: 'Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided.',
     inputSchema: {
@@ -53,7 +53,7 @@ export function defineGetLatestBalanceSheetMCPTool(server: McpServer, repo: Acco
       };
     }
     const userConfig = await repo.getUserConfig();
-    const report = await repo.getLatestBalanceSheet(formDate);
+    const report = await repo.ViewLatestBalanceSheet(formDate);
     if (!report) {
       return {
         content: [{ type: 'text', text: 'No balance sheet reports found.' }],

@@ -208,16 +208,16 @@ export async function runAccountingRepositoryTestSuite(
         const reportId = await repo.generateFinancialReport(reportTime);
         strictEqual(typeof reportId, 'number');
 
-        // Test getLatestTrialBalance
-        const latestTb = await repo.getLatestTrialBalance();
+        // Test ViewLatestTrialBalance
+        const latestTb = await repo.ViewLatestTrialBalance();
         strictEqual(latestTb?.reportTime, reportTime);
         const tbLineA = latestTb?.lines.find(l => l.accountCode === 2000);
         const tbLineB = latestTb?.lines.find(l => l.accountCode === 3000);
         strictEqual(typeof tbLineA, 'object');
         strictEqual(typeof tbLineB, 'object');
 
-        // Test getLatestBalanceSheet
-        const latestBs = await repo.getLatestBalanceSheet();
+        // Test ViewLatestBalanceSheet
+        const latestBs = await repo.ViewLatestBalanceSheet();
         strictEqual(latestBs?.reportTime, reportTime);
         const bsLineA = latestBs?.lines.find(l => l.accountCode === 2000);
         const bsLineB = latestBs?.lines.find(l => l.accountCode === 3000);
@@ -226,18 +226,18 @@ export async function runAccountingRepositoryTestSuite(
 
         // Test with fromDate
         const futureDate = new Date(reportTime + 1000).toISOString();
-        const latestTbWithDate = await repo.getLatestTrialBalance(futureDate);
+        const latestTbWithDate = await repo.ViewLatestTrialBalance(futureDate);
         strictEqual(latestTbWithDate?.reportTime, reportTime);
 
-        const latestBsWithDate = await repo.getLatestBalanceSheet(futureDate);
+        const latestBsWithDate = await repo.ViewLatestBalanceSheet(futureDate);
         strictEqual(latestBsWithDate?.reportTime, reportTime);
 
         // Test with past date (should return null)
         const pastDate = new Date(reportTime - 1000).toISOString();
-        const noTb = await repo.getLatestTrialBalance(pastDate);
+        const noTb = await repo.ViewLatestTrialBalance(pastDate);
         strictEqual(noTb, null);
 
-        const noBs = await repo.getLatestBalanceSheet(pastDate);
+        const noBs = await repo.ViewLatestBalanceSheet(pastDate);
         strictEqual(noBs, null);
       });
     });

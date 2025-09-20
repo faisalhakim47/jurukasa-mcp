@@ -40,7 +40,7 @@ suite('AccountTagsMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'manageManyAccounts',
+      name: 'ManageManyAccounts',
       arguments: {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
@@ -59,12 +59,12 @@ suite('AccountTagsMCPTools', function () {
     await repo.close();
   });
 
-  describe('Tool: setManyAccountTags', function () {
+  describe('Tool: SetManyAccountTags', function () {
     it('sets tags for multiple accounts', async function () {
       const res = await client.callTool({
-        name: 'setManyAccountTags',
+        name: 'SetManyAccountTags',
         arguments: {
-          taggedAccounts: [
+          accountTags: [
             { code: 100, tag: 'Asset' },
             { code: 200, tag: 'Revenue' },
           ],
@@ -92,8 +92,8 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles empty tagged accounts list', async function () {
       const res = await client.callTool({
-        name: 'setManyAccountTags',
-        arguments: { taggedAccounts: [] },
+        name: 'SetManyAccountTags',
+        arguments: { accountTags: [] },
       });
       assertPropDefined(res, 'content');
       assertArray(res.content);
@@ -104,9 +104,9 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles multiple tags for same account', async function () {
       const res = await client.callTool({
-        name: 'setManyAccountTags',
+        name: 'SetManyAccountTags',
         arguments: {
-          taggedAccounts: [
+          accountTags: [
             { code: 100, tag: 'Current Asset' },
             { code: 100, tag: 'Asset' },
             { code: 100, tag: 'Cash Flow - Cash Equivalents' },
@@ -121,13 +121,13 @@ suite('AccountTagsMCPTools', function () {
     });
   });
 
-  describe('Tool: unsetManyAccountTags', function () {
+  describe('Tool: UnsetManyAccountTags', function () {
     beforeEach(async function () {
       // Set up some tags first
       await client.callTool({
-        name: 'setManyAccountTags',
+        name: 'SetManyAccountTags',
         arguments: {
-          taggedAccounts: [
+          accountTags: [
             { code: 100, tag: 'Asset' },
             { code: 100, tag: 'Current Asset' },
             { code: 200, tag: 'Revenue' },
@@ -138,9 +138,9 @@ suite('AccountTagsMCPTools', function () {
 
     it('removes tags from multiple accounts', async function () {
       const res = await client.callTool({
-        name: 'unsetManyAccountTags',
+        name: 'UnsetManyAccountTags',
         arguments: {
-          taggedAccounts: [
+          accountTags: [
             { code: 100, tag: 'Asset' },
             { code: 200, tag: 'Revenue' },
           ],
@@ -172,8 +172,8 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles empty tagged accounts list', async function () {
       const res = await client.callTool({
-        name: 'unsetManyAccountTags',
-        arguments: { taggedAccounts: [] },
+        name: 'UnsetManyAccountTags',
+        arguments: { accountTags: [] },
       });
       assertPropDefined(res, 'content');
       assertArray(res.content);
@@ -184,9 +184,9 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles removal of non-existent tags gracefully', async function () {
       const res = await client.callTool({
-        name: 'unsetManyAccountTags',
+        name: 'UnsetManyAccountTags',
         arguments: {
-          taggedAccounts: [
+          accountTags: [
             { code: 100, tag: 'NonExistent' },
           ],
         },

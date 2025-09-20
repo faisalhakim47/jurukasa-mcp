@@ -3,21 +3,21 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
 export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('setManyAccountTags', {
+  server.registerTool('SetManyAccountTags', {
     title: 'Set many account tags',
     description: 'Set tags for multiple accounts. Each account can have multiple tags.',
     inputSchema: {
-      taggedAccounts: z.array(z.object({
+      accountTags: z.array(z.object({
         accountCode: z.number(),
         tag: z.string().describe('Tag is predefined string enum constant. Get it from '),
       })),
     },
   }, async function (params) {
-    if (params.taggedAccounts.length === 0) {
+    if (params.accountTags.length === 0) {
       const allAccounts = await repo.getManyAccounts({});
       if (allAccounts.length === 0) {
         return {
-          content: [{ type: 'text', text: 'No accounts exist in the system. Consider setting up an initial chart of accounts using the manageManyAccounts tool.' }],
+          content: [{ type: 'text', text: 'No accounts exist in the system. Consider setting up an initial chart of accounts using the ManageManyAccounts tool.' }],
         };
       } else {
         return {
@@ -27,8 +27,8 @@ export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: Account
     }
 
     try {
-      await repo.setManyAccountTags(params.taggedAccounts.map(ta => ({ accountCode: ta.accountCode, tag: ta.tag })));
-      const results = params.taggedAccounts.map(ta => `Account ${ta.accountCode} tagged with "${ta.tag}".`);
+      await repo.SetManyAccountTags(params.accountTags.map(ta => ({ accountCode: ta.accountCode, tag: ta.tag })));
+      const results = params.accountTags.map(ta => `Account ${ta.accountCode} tagged with "${ta.tag}".`);
       return {
         content: [{
           type: 'text',
@@ -44,31 +44,28 @@ export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: Account
   });
 }
 
-export function defineUnsetManyAccountTagsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('unsetManyAccountTags', {
+export function defineUnSetManyAccountTagsMCPTool(server: McpServer, repo: AccountingRepository) {
+  server.registerTool('UnsetManyAccountTags', {
     title: 'Unset many account tags',
     description: 'Remove tags from multiple accounts.',
     inputSchema: {
-      taggedAccounts: z.array(z.object({
-        code: z.number(),
+      accountTags: z.array(z.object({
+        accountCode: z.number(),
         tag: z.string(),
       })),
     },
   }, async function (params) {
-    if (params.taggedAccounts.length === 0) {
+    if (params.accountTags.length === 0) {
       return {
         content: [{ type: 'text', text: 'No tagged accounts provided, nothing to do.' }],
       };
     }
 
     try {
-      await repo.unsetManyAccountTags(params.taggedAccounts.map(ta => ({ accountCode: ta.code, tag: ta.tag })));
-      const results = params.taggedAccounts.map(ta => `Tag "${ta.tag}" removed from account ${ta.code}.`);
+      await repo.UnsetManyAccountTags(params.accountTags.map(ta => ({ accountCode: ta.accountCode, tag: ta.tag })));
+      const results = params.accountTags.map(ta => `Tag "${ta.tag}" removed from account ${ta.accountCode}.`);
       return {
-        content: [{
-          type: 'text',
-          text: results.join('\n'),
-        }],
+        content: [{ type: 'text', text: results.join('\n') }],
       };
     }
     catch (error) {

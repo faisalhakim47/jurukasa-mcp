@@ -504,7 +504,7 @@ export abstract class AccountingRepository {
     });
   }
 
-  async setManyAccountTags(input: Array<AccountTagInput>): Promise<void> {
+  async SetManyAccountTags(input: Array<AccountTagInput>): Promise<void> {
     for (const item of input) {
       try {
         await this.sql`INSERT OR REPLACE INTO account_tag (account_code, tag) VALUES (${item.accountCode}, ${item.tag})`;
@@ -516,10 +516,21 @@ export abstract class AccountingRepository {
     }
   }
 
-  async unsetManyAccountTags(input: Array<AccountTagInput>): Promise<void> {
+  async UnsetManyAccountTags(input: Array<AccountTagInput>): Promise<void> {
     for (const item of input) {
       await this.sql`DELETE FROM account_tag WHERE account_code = ${item.accountCode} AND tag = ${item.tag}`;
     }
+  }
+
+  async getExistingJournalEntryByIdempotentKey(idempotentKey: string): Promise<number | null> {
+    const result = await this.sql<{ ref: number }>`
+      SELECT ref FROM journal_entry WHERE idempotent_key = ${idempotentKey}
+    `;
+    if (result.length === 0) {
+      return null;
+    }
+    assertPropNumber(result[0], 'ref', 'Journal entry ref is not a number');
+    return result[0].ref;
   }
 
   async draftJournalEntry(params: DraftJournalEntryParams): Promise<number> {
@@ -792,7 +803,7 @@ export abstract class AccountingRepository {
     };
   }
 
-  async getLatestTrialBalance(fromDate?: string): Promise<TrialBalanceReport | null> {
+  async ViewLatestTrialBalance(fromDate?: string): Promise<TrialBalanceReport | null> {
     const reportTime = fromDate ? new Date(fromDate).getTime() : Date.now();
 
     // First get the latest report_time
@@ -854,7 +865,7 @@ export abstract class AccountingRepository {
     };
   }
 
-  async getLatestBalanceSheet(fromDate?: Date): Promise<BalanceSheetReport | null> {
+  async ViewLatestBalanceSheet(fromDate?: Date): Promise<BalanceSheetReport | null> {
     const reportTime = fromDate instanceof Date ? fromDate.getTime() : Date.now();
 
     // First get the latest report_time

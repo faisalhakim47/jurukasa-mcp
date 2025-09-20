@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
 export function defineManageManyAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('manageManyAccounts', {
+  server.registerTool('ManageManyAccounts', {
     title: 'Multi-purpose account management tool',
     description: 'Use this tool to create and or update (upsert) multiple accounts at once. This tool will create new accounts if they do not exist. This tool will update existing account names.',
     inputSchema: {
@@ -65,7 +65,7 @@ export function defineManageManyAccountsMCPTool(server: McpServer, repo: Account
           }
         }
         else {
-          results.push(`account ${account.code} "${account.name}" was found but normal balance mismatch (existing: ${existingAccount.normalBalance}, provided: ${account.normalBalance}). No changes were made.`);
+          results.push(`existing account ${account.code} "${account.name}" was found but normal balance mismatch (existing: ${existingAccount.normalBalance}, provided: ${account.normalBalance}). No changes were made.`);
         }
       }
       else {
@@ -84,10 +84,7 @@ export function defineManageManyAccountsMCPTool(server: McpServer, repo: Account
     }
 
     return {
-      content: [{
-        type: 'text',
-        text: `# Account Management Result\n- ${results.join('\n- ')}`,
-      }],
+      content: [{ type: 'text', text: `# Account Management Result\n- ${results.join('\n- ')}` }],
     };
   });
 }
@@ -109,14 +106,11 @@ export function defineViewChartOfAccountsMCPTool(server: McpServer, repo: Accoun
     };
     const roots = await repo.ViewChartOfAccounts({ includeInactive: params.showInactive });
     const asciiHierarchy = renderAsciiHierarchy({
-      label: 'Chart of Accounts',
+      label: '# Chart of Accounts',
       children: roots.map(chartOfAccountToAsciiHierarchy),
     });
     return {
-      content: [{
-        type: 'text',
-        text: asciiHierarchy,
-      }],
+      content: [{ type: 'text', text: asciiHierarchy }],
     };
   });
 }

@@ -40,7 +40,7 @@ suite('AccountManagementMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'manageManyAccounts',
+      name: 'ManageManyAccounts',
       arguments: {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
@@ -59,10 +59,10 @@ suite('AccountManagementMCPTools', function () {
     await repo.close();
   });
 
-  describe('Tool: manageManyAccounts', function () {
+  describe('Tool: ManageManyAccounts', function () {
     it('creates new accounts and skips existing ones', async function () {
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Cash', normalBalance: 'debit' },
@@ -87,7 +87,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('handles empty accounts list', async function () {
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: { accounts: [] },
       });
       assertPropDefined(res, 'content');
@@ -100,7 +100,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('updates existing account names', async function () {
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Petty Cash', normalBalance: 'debit' },
@@ -123,7 +123,7 @@ suite('AccountManagementMCPTools', function () {
     it('sets control account hierarchy', async function () {
       // First create a parent account
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 1000, name: 'Assets', normalBalance: 'debit' },
@@ -133,7 +133,7 @@ suite('AccountManagementMCPTools', function () {
 
       // Now set control account for existing accounts
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 1000 },
@@ -156,7 +156,7 @@ suite('AccountManagementMCPTools', function () {
     it('deactivates accounts with zero balance', async function () {
       // Create a new account to deactivate
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 500, name: 'Temporary Account', normalBalance: 'debit' },
@@ -166,7 +166,7 @@ suite('AccountManagementMCPTools', function () {
 
       // Deactivate the account
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 500, name: 'Temporary Account', normalBalance: 'debit', deactivate: true },
@@ -185,7 +185,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('rejects updates when normal balance mismatches', async function () {
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Cash', normalBalance: 'credit' }, // Wrong normal balance
@@ -202,7 +202,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles account creation errors gracefully', async function () {
       // Try to create account with duplicate code but different normal balance
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Duplicate Cash', normalBalance: 'credit' },
@@ -216,7 +216,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('processes mixed create and update operations', async function () {
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Updated Cash', normalBalance: 'debit' }, // Update existing
@@ -235,7 +235,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles multiple control account changes', async function () {
       // Create parent accounts
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 2000, name: 'Current Assets', normalBalance: 'debit' },
@@ -246,7 +246,7 @@ suite('AccountManagementMCPTools', function () {
 
       // Set initial control account
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 2000 },
@@ -256,7 +256,7 @@ suite('AccountManagementMCPTools', function () {
 
       // Change control account
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 3000 },
@@ -297,7 +297,7 @@ suite('AccountManagementMCPTools', function () {
     it('displays hierarchical structure with parent-child relationships', async function () {
       // Set up a hierarchy: Assets -> Current Assets -> Cash
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 1000, name: 'Assets', normalBalance: 'debit' },
@@ -308,7 +308,7 @@ suite('AccountManagementMCPTools', function () {
 
       // Update existing cash account to be under Current Assets
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 1100 },
@@ -355,7 +355,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles showInactive parameter to include inactive accounts', async function () {
       // Create and then deactivate an account
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 700, name: 'Inactive Account', normalBalance: 'debit' },
@@ -364,7 +364,7 @@ suite('AccountManagementMCPTools', function () {
       });
 
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 700, name: 'Inactive Account', normalBalance: 'debit', deactivate: true },
@@ -434,7 +434,7 @@ suite('AccountManagementMCPTools', function () {
     it('displays complex multi-level hierarchy correctly', async function () {
       // Create a complex hierarchy
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             // Level 1
@@ -472,7 +472,7 @@ suite('AccountManagementMCPTools', function () {
     it('sorts accounts properly in hierarchy', async function () {
       // Create accounts in non-sequential order
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 1300, name: 'Third Account', normalBalance: 'debit' },
@@ -500,7 +500,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles malformed account data gracefully', async function () {
       // Test with invalid account codes
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: -1, name: 'Invalid Code', normalBalance: 'debit' },
@@ -517,7 +517,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles extremely long account names', async function () {
       const longName = 'A'.repeat(1000); // Very long account name
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 9999, name: longName, normalBalance: 'debit' },
@@ -532,7 +532,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles special characters in account names', async function () {
       const specialName = 'Test & Co. "Special" <Account> $%@!';
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 8888, name: specialName, normalBalance: 'debit' },
@@ -556,7 +556,7 @@ suite('AccountManagementMCPTools', function () {
       }
 
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: { accounts: largeAccountsBatch },
       });
 
@@ -573,7 +573,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles circular control account references gracefully', async function () {
       // Create accounts first
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 8001, name: 'Parent A', normalBalance: 'debit' },
@@ -584,7 +584,7 @@ suite('AccountManagementMCPTools', function () {
 
       // Try to create circular reference: A -> B -> A
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 8001, name: 'Parent A', normalBalance: 'debit', controlAccountCode: 8002 },
@@ -594,7 +594,7 @@ suite('AccountManagementMCPTools', function () {
 
       // This should either succeed or fail gracefully - the important thing is it doesn't crash
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 8002, name: 'Parent B', normalBalance: 'debit', controlAccountCode: 8001 },
@@ -609,7 +609,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('handles invalid control account codes', async function () {
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 9001, name: 'Test Account', normalBalance: 'debit', controlAccountCode: 99999 }, // Non-existent control account
@@ -624,7 +624,7 @@ suite('AccountManagementMCPTools', function () {
 
     it('preserves data integrity during mixed success/failure operations', async function () {
       const res = await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 9100, name: 'Valid Account', normalBalance: 'debit' }, // Should succeed
@@ -649,7 +649,7 @@ suite('AccountManagementMCPTools', function () {
     it('handles ViewChartOfAccounts with corrupted hierarchy data', async function () {
       // Create accounts with potentially problematic hierarchy
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [
             { code: 9200, name: 'Orphaned Child', normalBalance: 'debit', controlAccountCode: 99999 }, // Parent doesn't exist
@@ -677,7 +677,7 @@ suite('AccountManagementMCPTools', function () {
       for (let i = 0; i < 5; i++) {
         promises.push(
           client.callTool({
-            name: 'manageManyAccounts',
+            name: 'ManageManyAccounts',
             arguments: {
               accounts: [
                 { code: 9300 + i, name: `Concurrent Account ${i}`, normalBalance: 'debit' },
@@ -701,7 +701,7 @@ suite('AccountManagementMCPTools', function () {
       // Create a deep hierarchy (10 levels)
       let parentCode = 9400;
       await client.callTool({
-        name: 'manageManyAccounts',
+        name: 'ManageManyAccounts',
         arguments: {
           accounts: [{ code: parentCode, name: 'Level 1', normalBalance: 'debit' }],
         },
@@ -710,7 +710,7 @@ suite('AccountManagementMCPTools', function () {
       for (let level = 2; level <= 10; level++) {
         const currentCode = parentCode + level - 1;
         await client.callTool({
-          name: 'manageManyAccounts',
+          name: 'ManageManyAccounts',
           arguments: {
             accounts: [
               {
@@ -724,10 +724,7 @@ suite('AccountManagementMCPTools', function () {
         });
       }
 
-      const res = await client.callTool({
-        name: 'ViewChartOfAccounts',
-        arguments: {},
-      });
+      const res = await client.callTool({ name: 'ViewChartOfAccounts', arguments: {} });
 
       const responseText = (res.content[0] as { text: string }).text;
       ok(responseText.includes('Level 1'), 'should show top level');

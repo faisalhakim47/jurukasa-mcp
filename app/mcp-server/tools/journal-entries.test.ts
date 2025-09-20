@@ -40,7 +40,7 @@ suite('JournalEntriesMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'manageManyAccounts',
+      name: 'ManageManyAccounts',
       arguments: {
         accounts: [
           { code: 100, name: 'Cash', normalBalance: 'debit' },
