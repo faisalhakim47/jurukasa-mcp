@@ -43,9 +43,9 @@ suite('JournalEntriesMCPTools', function () {
       name: 'ManageManyAccounts',
       arguments: {
         accounts: [
-          { code: 100, name: 'Cash', normalBalance: 'debit' },
-          { code: 200, name: 'Revenue', normalBalance: 'credit' },
-          { code: 300, name: 'Equity', normalBalance: 'credit' },
+          { accountCode: 100, name: 'Cash', normalBalance: 'debit' },
+          { accountCode: 200, name: 'Revenue', normalBalance: 'credit' },
+          { accountCode: 300, name: 'Equity', normalBalance: 'credit' },
         ],
       },
     });

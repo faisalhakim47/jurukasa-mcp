@@ -209,7 +209,7 @@ export async function runAccountingRepositoryTestSuite(
         strictEqual(typeof reportId, 'number');
 
         // Test ViewLatestTrialBalance
-        const latestTb = await repo.ViewLatestTrialBalance();
+        const latestTb = await repo.viewLatestTrialBalance();
         strictEqual(latestTb?.reportTime, reportTime);
         const tbLineA = latestTb?.lines.find(l => l.accountCode === 2000);
         const tbLineB = latestTb?.lines.find(l => l.accountCode === 3000);
@@ -217,7 +217,7 @@ export async function runAccountingRepositoryTestSuite(
         strictEqual(typeof tbLineB, 'object');
 
         // Test ViewLatestBalanceSheet
-        const latestBs = await repo.ViewLatestBalanceSheet();
+        const latestBs = await repo.viewLatestBalanceSheet();
         strictEqual(latestBs?.reportTime, reportTime);
         const bsLineA = latestBs?.lines.find(l => l.accountCode === 2000);
         const bsLineB = latestBs?.lines.find(l => l.accountCode === 3000);
@@ -226,18 +226,18 @@ export async function runAccountingRepositoryTestSuite(
 
         // Test with fromDate
         const futureDate = new Date(reportTime + 1000).toISOString();
-        const latestTbWithDate = await repo.ViewLatestTrialBalance(futureDate);
+        const latestTbWithDate = await repo.viewLatestTrialBalance(futureDate);
         strictEqual(latestTbWithDate?.reportTime, reportTime);
 
-        const latestBsWithDate = await repo.ViewLatestBalanceSheet(futureDate);
+        const latestBsWithDate = await repo.viewLatestBalanceSheet(futureDate);
         strictEqual(latestBsWithDate?.reportTime, reportTime);
 
         // Test with past date (should return null)
         const pastDate = new Date(reportTime - 1000).toISOString();
-        const noTb = await repo.ViewLatestTrialBalance(pastDate);
+        const noTb = await repo.viewLatestTrialBalance(pastDate);
         strictEqual(noTb, null);
 
-        const noBs = await repo.ViewLatestBalanceSheet(pastDate);
+        const noBs = await repo.viewLatestBalanceSheet(pastDate);
         strictEqual(noBs, null);
       });
     });

@@ -12,7 +12,7 @@ export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: Acco
     },
   }, async function (params) {
     const userConfig = await repo.getUserConfig();
-    const report = await repo.ViewLatestTrialBalance(params.fromDate);
+    const report = await repo.viewLatestTrialBalance(params.fromDate);
     if (!report) {
       return {
         content: [{ type: 'text', text: 'No trial balance reports found.' }],
@@ -53,7 +53,7 @@ export function defineGetLatestBalanceSheetMCPTool(server: McpServer, repo: Acco
       };
     }
     const userConfig = await repo.getUserConfig();
-    const report = await repo.ViewLatestBalanceSheet(formDate);
+    const report = await repo.viewLatestBalanceSheet(formDate);
     if (!report) {
       return {
         content: [{ type: 'text', text: 'No balance sheet reports found.' }],

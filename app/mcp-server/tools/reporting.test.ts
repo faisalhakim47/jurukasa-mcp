@@ -43,9 +43,9 @@ suite('ReportingMCPTools', function () {
       name: 'ManageManyAccounts',
       arguments: {
         accounts: [
-          { code: 100, name: 'Cash', normalBalance: 'debit' },
-          { code: 200, name: 'Revenue', normalBalance: 'credit' },
-          { code: 300, name: 'Equity', normalBalance: 'credit' },
+          { accountCode: 100, name: 'Cash', normalBalance: 'debit' },
+          { accountCode: 200, name: 'Revenue', normalBalance: 'credit' },
+          { accountCode: 300, name: 'Equity', normalBalance: 'credit' },
         ],
       },
     });
@@ -55,8 +55,8 @@ suite('ReportingMCPTools', function () {
       name: 'SetManyAccountTags',
       arguments: {
         accountTags: [
-          { code: 100, tag: 'Balance Sheet - Current Asset' },
-          { code: 300, tag: 'Balance Sheet - Equity' },
+          { accountCode: 100, tag: 'Balance Sheet - Current Asset' },
+          { accountCode: 300, tag: 'Balance Sheet - Equity' },
         ],
       },
     });

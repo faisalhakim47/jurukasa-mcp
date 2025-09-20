@@ -43,9 +43,9 @@ suite('AccountManagementMCPTools', function () {
       name: 'ManageManyAccounts',
       arguments: {
         accounts: [
-          { code: 100, name: 'Cash', normalBalance: 'debit' },
-          { code: 200, name: 'Revenue', normalBalance: 'credit' },
-          { code: 300, name: 'Equity', normalBalance: 'credit' },
+          { accountCode: 100, name: 'Cash', normalBalance: 'debit' },
+          { accountCode: 200, name: 'Revenue', normalBalance: 'credit' },
+          { accountCode: 300, name: 'Equity', normalBalance: 'credit' },
         ],
       },
     });
@@ -65,8 +65,8 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Cash', normalBalance: 'debit' },
-            { code: 400, name: 'Expenses', normalBalance: 'debit' },
+            { accountCode: 100, name: 'Cash', normalBalance: 'debit' },
+            { accountCode: 400, name: 'Expenses', normalBalance: 'debit' },
           ],
         },
       });
@@ -103,8 +103,8 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Petty Cash', normalBalance: 'debit' },
-            { code: 200, name: 'Sales Revenue', normalBalance: 'credit' },
+            { accountCode: 100, name: 'Petty Cash', normalBalance: 'debit' },
+            { accountCode: 200, name: 'Sales Revenue', normalBalance: 'credit' },
           ],
         },
       });
@@ -126,7 +126,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 1000, name: 'Assets', normalBalance: 'debit' },
+            { accountCode: 1000, name: 'Assets', normalBalance: 'debit' },
           ],
         },
       });
@@ -136,8 +136,8 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 1000 },
-            { code: 400, name: 'Expenses', normalBalance: 'debit', controlAccountCode: 1000 },
+            { accountCode: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 1000 },
+            { accountCode: 400, name: 'Expenses', normalBalance: 'debit', controlAccountCode: 1000 },
           ],
         },
       });
@@ -159,7 +159,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 500, name: 'Temporary Account', normalBalance: 'debit' },
+            { accountCode: 500, name: 'Temporary Account', normalBalance: 'debit' },
           ],
         },
       });
@@ -169,7 +169,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 500, name: 'Temporary Account', normalBalance: 'debit', deactivate: true },
+            { accountCode: 500, name: 'Temporary Account', normalBalance: 'debit', deactivate: true },
           ],
         },
       });
@@ -188,7 +188,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Cash', normalBalance: 'credit' }, // Wrong normal balance
+            { accountCode: 100, name: 'Cash', normalBalance: 'credit' }, // Wrong normal balance
           ],
         },
       });
@@ -205,7 +205,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Duplicate Cash', normalBalance: 'credit' },
+            { accountCode: 100, name: 'Duplicate Cash', normalBalance: 'credit' },
           ],
         },
       });
@@ -219,9 +219,9 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Updated Cash', normalBalance: 'debit' }, // Update existing
-            { code: 600, name: 'New Liability', normalBalance: 'credit' }, // Create new
-            { code: 200, name: 'Revenue', normalBalance: 'credit' }, // No change
+            { accountCode: 100, name: 'Updated Cash', normalBalance: 'debit' }, // Update existing
+            { accountCode: 600, name: 'New Liability', normalBalance: 'credit' }, // Create new
+            { accountCode: 200, name: 'Revenue', normalBalance: 'credit' }, // No change
           ],
         },
       });
@@ -238,8 +238,8 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 2000, name: 'Current Assets', normalBalance: 'debit' },
-            { code: 3000, name: 'Fixed Assets', normalBalance: 'debit' },
+            { accountCode: 2000, name: 'Current Assets', normalBalance: 'debit' },
+            { accountCode: 3000, name: 'Fixed Assets', normalBalance: 'debit' },
           ],
         },
       });
@@ -249,7 +249,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 2000 },
+            { accountCode: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 2000 },
           ],
         },
       });
@@ -259,7 +259,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 3000 },
+            { accountCode: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 3000 },
           ],
         },
       });
@@ -300,8 +300,8 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 1000, name: 'Assets', normalBalance: 'debit' },
-            { code: 1100, name: 'Current Assets', normalBalance: 'debit', controlAccountCode: 1000 },
+            { accountCode: 1000, name: 'Assets', normalBalance: 'debit' },
+            { accountCode: 1100, name: 'Current Assets', normalBalance: 'debit', controlAccountCode: 1000 },
           ],
         },
       });
@@ -311,7 +311,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 1100 },
+            { accountCode: 100, name: 'Cash', normalBalance: 'debit', controlAccountCode: 1100 },
           ],
         },
       });
@@ -358,7 +358,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 700, name: 'Inactive Account', normalBalance: 'debit' },
+            { accountCode: 700, name: 'Inactive Account', normalBalance: 'debit' },
           ],
         },
       });
@@ -367,7 +367,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 700, name: 'Inactive Account', normalBalance: 'debit', deactivate: true },
+            { accountCode: 700, name: 'Inactive Account', normalBalance: 'debit', deactivate: true },
           ],
         },
       });
@@ -438,15 +438,15 @@ suite('AccountManagementMCPTools', function () {
         arguments: {
           accounts: [
             // Level 1
-            { code: 1000, name: 'Assets', normalBalance: 'debit' },
-            { code: 2000, name: 'Liabilities', normalBalance: 'credit' },
+            { accountCode: 1000, name: 'Assets', normalBalance: 'debit' },
+            { accountCode: 2000, name: 'Liabilities', normalBalance: 'credit' },
             // Level 2
-            { code: 1100, name: 'Current Assets', normalBalance: 'debit', controlAccountCode: 1000 },
-            { code: 1200, name: 'Fixed Assets', normalBalance: 'debit', controlAccountCode: 1000 },
-            { code: 2100, name: 'Current Liabilities', normalBalance: 'credit', controlAccountCode: 2000 },
+            { accountCode: 1100, name: 'Current Assets', normalBalance: 'debit', controlAccountCode: 1000 },
+            { accountCode: 1200, name: 'Fixed Assets', normalBalance: 'debit', controlAccountCode: 1000 },
+            { accountCode: 2100, name: 'Current Liabilities', normalBalance: 'credit', controlAccountCode: 2000 },
             // Level 3
-            { code: 1110, name: 'Cash and Equivalents', normalBalance: 'debit', controlAccountCode: 1100 },
-            { code: 1120, name: 'Receivables', normalBalance: 'debit', controlAccountCode: 1100 },
+            { accountCode: 1110, name: 'Cash and Equivalents', normalBalance: 'debit', controlAccountCode: 1100 },
+            { accountCode: 1120, name: 'Receivables', normalBalance: 'debit', controlAccountCode: 1100 },
           ],
         },
       });
@@ -475,9 +475,9 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 1300, name: 'Third Account', normalBalance: 'debit' },
-            { code: 1100, name: 'First Account', normalBalance: 'debit' },
-            { code: 1200, name: 'Second Account', normalBalance: 'debit' },
+            { accountCode: 1300, name: 'Third Account', normalBalance: 'debit' },
+            { accountCode: 1100, name: 'First Account', normalBalance: 'debit' },
+            { accountCode: 1200, name: 'Second Account', normalBalance: 'debit' },
           ],
         },
       });
@@ -503,8 +503,8 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: -1, name: 'Invalid Code', normalBalance: 'debit' },
-            { code: 0, name: 'Zero Code', normalBalance: 'debit' },
+            { accountCode: -1, name: 'Invalid Code', normalBalance: 'debit' },
+            { accountCode: 0, name: 'Zero Code', normalBalance: 'debit' },
           ],
         },
       });
@@ -520,7 +520,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 9999, name: longName, normalBalance: 'debit' },
+            { accountCode: 9999, name: longName, normalBalance: 'debit' },
           ],
         },
       });
@@ -535,7 +535,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 8888, name: specialName, normalBalance: 'debit' },
+            { accountCode: 8888, name: specialName, normalBalance: 'debit' },
           ],
         },
       });
@@ -549,7 +549,7 @@ suite('AccountManagementMCPTools', function () {
       const largeAccountsBatch = [];
       for (let i = 5000; i < 5100; i++) {
         largeAccountsBatch.push({
-          code: i,
+          accountCode: i,
           name: `Account ${i}`,
           normalBalance: i % 2 === 0 ? 'debit' : 'credit' as 'debit' | 'credit',
         });
@@ -576,8 +576,8 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 8001, name: 'Parent A', normalBalance: 'debit' },
-            { code: 8002, name: 'Parent B', normalBalance: 'debit' },
+            { accountCode: 8001, name: 'Parent A', normalBalance: 'debit' },
+            { accountCode: 8002, name: 'Parent B', normalBalance: 'debit' },
           ],
         },
       });
@@ -587,7 +587,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 8001, name: 'Parent A', normalBalance: 'debit', controlAccountCode: 8002 },
+            { accountCode: 8001, name: 'Parent A', normalBalance: 'debit', controlAccountCode: 8002 },
           ],
         },
       });
@@ -597,7 +597,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 8002, name: 'Parent B', normalBalance: 'debit', controlAccountCode: 8001 },
+            { accountCode: 8002, name: 'Parent B', normalBalance: 'debit', controlAccountCode: 8001 },
           ],
         },
       });
@@ -612,7 +612,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 9001, name: 'Test Account', normalBalance: 'debit', controlAccountCode: 99999 }, // Non-existent control account
+            { accountCode: 9001, name: 'Test Account', normalBalance: 'debit', controlAccountCode: 99999 }, // Non-existent control account
           ],
         },
       });
@@ -627,9 +627,9 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 9100, name: 'Valid Account', normalBalance: 'debit' }, // Should succeed
-            { code: 100, name: 'Cash', normalBalance: 'credit' }, // Should fail (normal balance mismatch)
-            { code: 9101, name: 'Another Valid Account', normalBalance: 'credit' }, // Should succeed
+            { accountCode: 9100, name: 'Valid Account', normalBalance: 'debit' }, // Should succeed
+            { accountCode: 100, name: 'Cash', normalBalance: 'credit' }, // Should fail (normal balance mismatch)
+            { accountCode: 9101, name: 'Another Valid Account', normalBalance: 'credit' }, // Should succeed
           ],
         },
       });
@@ -652,7 +652,7 @@ suite('AccountManagementMCPTools', function () {
         name: 'ManageManyAccounts',
         arguments: {
           accounts: [
-            { code: 9200, name: 'Orphaned Child', normalBalance: 'debit', controlAccountCode: 99999 }, // Parent doesn't exist
+            { accountCode: 9200, name: 'Orphaned Child', normalBalance: 'debit', controlAccountCode: 99999 }, // Parent doesn't exist
           ],
         },
       });
@@ -680,7 +680,7 @@ suite('AccountManagementMCPTools', function () {
             name: 'ManageManyAccounts',
             arguments: {
               accounts: [
-                { code: 9300 + i, name: `Concurrent Account ${i}`, normalBalance: 'debit' },
+                { accountCode: 9300 + i, name: `Concurrent Account ${i}`, normalBalance: 'debit' },
               ],
             },
           })
@@ -703,7 +703,7 @@ suite('AccountManagementMCPTools', function () {
       await client.callTool({
         name: 'ManageManyAccounts',
         arguments: {
-          accounts: [{ code: parentCode, name: 'Level 1', normalBalance: 'debit' }],
+          accounts: [{ accountCode: parentCode, name: 'Level 1', normalBalance: 'debit' }],
         },
       });
 
@@ -714,7 +714,7 @@ suite('AccountManagementMCPTools', function () {
           arguments: {
             accounts: [
               {
-                code: currentCode,
+                accountCode: currentCode,
                 name: `Level ${level}`,
                 normalBalance: 'debit',
                 controlAccountCode: parentCode + level - 2

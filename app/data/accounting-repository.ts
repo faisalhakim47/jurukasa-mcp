@@ -803,7 +803,7 @@ export abstract class AccountingRepository {
     };
   }
 
-  async ViewLatestTrialBalance(fromDate?: string): Promise<TrialBalanceReport | null> {
+  async viewLatestTrialBalance(fromDate?: string): Promise<TrialBalanceReport | null> {
     const reportTime = fromDate ? new Date(fromDate).getTime() : Date.now();
 
     // First get the latest report_time
@@ -865,8 +865,8 @@ export abstract class AccountingRepository {
     };
   }
 
-  async ViewLatestBalanceSheet(fromDate?: Date): Promise<BalanceSheetReport | null> {
-    const reportTime = fromDate instanceof Date ? fromDate.getTime() : Date.now();
+  async viewLatestBalanceSheet(fromDate?: string): Promise<BalanceSheetReport | null> {
+    const reportTime = fromDate ? new Date(fromDate).getTime() : Date.now();
 
     // First get the latest report_time
     const latestReportResult = await this.sql<{ report_time: number }>`
