@@ -8,8 +8,8 @@ export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: Account
     description: 'Set tags for multiple accounts. Each account can have multiple tags.',
     inputSchema: {
       taggedAccounts: z.array(z.object({
-        code: z.number(),
-        tag: z.string(),
+        accountCode: z.number(),
+        tag: z.string().describe('Tag is predefined string enum constant. Get it from '),
       })),
     },
   }, async function (params) {
@@ -27,8 +27,8 @@ export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: Account
     }
 
     try {
-      await repo.setManyAccountTags(params.taggedAccounts.map(ta => ({ accountCode: ta.code, tag: ta.tag })));
-      const results = params.taggedAccounts.map(ta => `Account ${ta.code} tagged with "${ta.tag}".`);
+      await repo.setManyAccountTags(params.taggedAccounts.map(ta => ({ accountCode: ta.accountCode, tag: ta.tag })));
+      const results = params.taggedAccounts.map(ta => `Account ${ta.accountCode} tagged with "${ta.tag}".`);
       return {
         content: [{
           type: 'text',

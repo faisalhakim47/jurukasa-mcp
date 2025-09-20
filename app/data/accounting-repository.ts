@@ -1,12 +1,12 @@
-import { assertPropNumber, assertPropString } from '@app/tools/assertion.js';
+import { assertPropNullableNumber, assertPropNumber, assertPropString } from '@app/tools/assertion.js';
 
 export type UserConfig = {
-  businessName: string|null;
-  businessType: string|null;
-  currencyCode: string|null;
-  currencyDecimalPlaces: number|null;
-  locale?: string|null;
-  fiscalYearStartMonth?: number|null;
+  businessName: string | null;
+  businessType: string | null;
+  currencyCode: string | null;
+  currencyDecimalPlaces: number | null;
+  locale?: string | null;
+  fiscalYearStartMonth?: number | null;
 };
 
 type Account = {
@@ -15,6 +15,7 @@ type Account = {
   normalBalance: 'debit' | 'credit';
   balance: number;
   controlAccountCode: number | null;
+  isActive: boolean | null;
 }
 
 type AccountInput = {
@@ -23,6 +24,10 @@ type AccountInput = {
   normalBalance?: 'debit' | 'credit';
   controlAccountCode?: Account | null;
 }
+
+type ChartOfAccountQuery = {
+  includeInactive?: boolean;
+};
 
 export type ChartOfAccount = {
   code: number;
@@ -35,6 +40,12 @@ export type ChartOfAccount = {
 type AccountTagInput = {
   accountCode: number;
   tag: string;
+}
+
+type AccountUpdateParams = {
+  name?: string;
+  controlCode?: number | null;
+  deactivate?: boolean;
 }
 
 type JournalEntryLine = {
@@ -178,7 +189,7 @@ export abstract class AccountingRepository {
   }
 
   async addAccount(code: number, name: string, normalBalance: 'debit' | 'credit'): Promise<void> {
-  await this.sql`INSERT INTO account (code, name, normal_balance, is_active, created_at, updated_at) VALUES (${code}, ${name}, ${normalBalance === 'debit' ? 0 : 1}, ${1}, ${0}, ${0})`;
+    await this.sql`INSERT INTO account (code, name, normal_balance, is_active, created_at, updated_at) VALUES (${code}, ${name}, ${normalBalance === 'debit' ? 0 : 1}, ${1}, ${0}, ${0})`;
   }
 
   async setAccountName(code: number, name: string): Promise<void> {
@@ -189,14 +200,35 @@ export abstract class AccountingRepository {
     await this.sql`UPDATE account SET control_account_code = ${controlAccountCode} WHERE code = ${code}`;
   }
 
-  async getChartOfAccounts(): Promise<ChartOfAccount[]> {
+  async updateAccount(code: number, updates?: AccountUpdateParams): Promise<void> {
+    await this.sql`
+      UPDATE account SET
+        name = COALESCE(${updates?.name}, name),
+        control_account_code = CASE
+          WHEN ${updates?.controlCode} IS NOT NULL THEN ${updates?.controlCode}
+          ELSE control_account_code
+        END,
+        is_active = CASE
+          WHEN ${updates?.deactivate} = TRUE THEN 0
+          WHEN ${updates?.deactivate} = FALSE THEN 1
+          ELSE is_active
+        END
+      WHERE code = ${code}
+    `;
+  }
+
+  async ViewChartOfAccounts(query?: ChartOfAccountQuery): Promise<ChartOfAccount[]> {
+    const includeInactive = query?.includeInactive ? 1 : 0;
     // Use a recursive CTE to walk the parent->child (control_account_code) relationships.
     // Start with top-level accounts (control_account_code IS NULL) and recurse to children.
+    // includeInactive is a numeric flag (0 or 1). When 0, only include active accounts (is_active = 1).
+    // When 1, include all accounts regardless of is_active.
     const rows = await this.sql`
       WITH RECURSIVE tree(code, name, normal_balance, balance, control_account_code, depth, path) AS (
         SELECT code, name, normal_balance, balance, control_account_code, 0 AS depth, printf('%04d', code) as path
         FROM account
-        WHERE is_active = 1 AND control_account_code IS NULL
+        WHERE (${includeInactive} = 1 OR is_active = 1)
+          AND control_account_code IS NULL
         UNION ALL
         SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, tree.depth + 1, tree.path || ',' || printf('%04d', a.code)
         FROM account a
@@ -255,7 +287,7 @@ export abstract class AccountingRepository {
       .map(function () { return '?'; })
       .join(', ');
     const result = await this.rawSql(`
-      SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code
+      SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
       FROM account a
       WHERE a.is_active = 1
         AND (
@@ -271,12 +303,15 @@ export abstract class AccountingRepository {
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
+      assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
+      assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
         code: row.code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
-        controlAccountCode: null,
+        controlAccountCode: row.control_account_code,
+        isActive: row.is_active === 1,
       };
     });
   }
@@ -327,19 +362,15 @@ export abstract class AccountingRepository {
     let sql: string;
     if (whereClauses.length > 0) {
       sql = `
-        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance
+        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
         FROM account a
-        WHERE a.is_active = 1
-          AND (
-            ${whereClauses.join('\n            OR ')}
-          )
+        WHERE ${whereClauses.join(' OR ')}
         ORDER BY a.code
       `;
     } else {
       sql = `
-        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance
+        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
         FROM account a
-        WHERE a.is_active = 1
         ORDER BY a.code
       `;
     }
@@ -350,19 +381,22 @@ export abstract class AccountingRepository {
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
+      assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
+      assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
         code: row.code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
-        controlAccountCode: null,
+        controlAccountCode: row.control_account_code,
+        isActive: row.is_active === 1,
       };
     });
   }
 
   private async getAccountByCodeOrName(codeOrName: number | string): Promise<Account | null> {
     const result = await this.sql`
-      SELECT a.code, a.name, a.normal_balance, a.balance
+      SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
       FROM account a
       WHERE a.is_active = 1
         AND (
@@ -378,12 +412,15 @@ export abstract class AccountingRepository {
     assertPropString(row, 'name', 'Account name is not a string');
     assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
     assertPropNumber(row, 'balance', 'Account balance is not a number');
+    assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
+    assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
     return {
       code: row.code,
       name: row.name,
       normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
       balance: row.balance,
-      controlAccountCode: null,
+      controlAccountCode: row.control_account_code,
+      isActive: row.is_active === 1,
     };
   }
 
@@ -397,7 +434,7 @@ export abstract class AccountingRepository {
 
   async getAccountsByTag(tag: string, offset: number, limit: number): Promise<Account[]> {
     const result = await this.sql`
-      SELECT a.code, a.name, a.normal_balance, a.balance
+      SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
       FROM account a
       JOIN account_tag at ON a.code = at.account_code
       WHERE a.is_active = 1 AND at.tag = ${tag}
@@ -409,12 +446,15 @@ export abstract class AccountingRepository {
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
+      assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
+      assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
         code: row.code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
-        controlAccountCode: null,
+        controlAccountCode: row.control_account_code,
+        isActive: row.is_active === 1,
       };
     });
   }
@@ -435,7 +475,7 @@ export abstract class AccountingRepository {
       .map(function () { return '?'; })
       .join(', ');
     const result = await this.rawSql(`
-      SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance
+      SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
       FROM account a
       JOIN account_tag at ON a.code = at.account_code
       WHERE a.is_active = 1 AND at.tag IN (${placeholders})
@@ -451,12 +491,15 @@ export abstract class AccountingRepository {
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
+      assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
+      assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
         code: row.code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
-        controlAccountCode: null,
+        controlAccountCode: row.control_account_code,
+        isActive: row.is_active === 1,
       };
     });
   }
@@ -514,15 +557,15 @@ export abstract class AccountingRepository {
     const entry = await this.sql<{ post_time: number | null }>`
       SELECT post_time FROM journal_entry WHERE ref = ${journalEntryId}
     `;
-    
+
     if (entry.length === 0) {
       throw new Error(`Journal entry ${journalEntryId} does not exist`);
     }
-    
+
     if (entry[0].post_time !== null) {
       throw new Error(`Journal entry ${journalEntryId} is already posted`);
     }
-    
+
     await this.sql`UPDATE journal_entry SET post_time = ${postTime} WHERE ref = ${journalEntryId}`;
   }
 
@@ -531,11 +574,11 @@ export abstract class AccountingRepository {
     const entry = await this.sql<{ post_time: number | null }>`
       SELECT post_time FROM journal_entry WHERE ref = ${journalEntryRef}
     `;
-    
+
     if (entry.length === 0) {
       throw new Error(`Journal entry ${journalEntryRef} does not exist`);
     }
-    
+
     if (entry[0].post_time !== null) {
       throw new Error(`Journal entry ${journalEntryRef} is already posted and cannot be updated`);
     }
@@ -544,7 +587,7 @@ export abstract class AccountingRepository {
     if (params.entryTime !== undefined || params.description !== undefined || params.idempotentKey !== undefined) {
       const updates = [];
       const values = [];
-      
+
       if (params.entryTime !== undefined) {
         updates.push('entry_time = ?');
         values.push(params.entryTime);
@@ -557,7 +600,7 @@ export abstract class AccountingRepository {
         updates.push('idempotent_key = ?');
         values.push(params.idempotentKey);
       }
-      
+
       if (updates.length > 0) {
         values.push(journalEntryRef);
         await this.rawSql(`UPDATE journal_entry SET ${updates.join(', ')} WHERE ref = ?`, values);
@@ -568,7 +611,7 @@ export abstract class AccountingRepository {
     if (params.lines !== undefined) {
       // Delete existing lines
       await this.sql`DELETE FROM journal_entry_line WHERE journal_entry_ref = ${journalEntryRef}`;
-      
+
       // Insert new lines
       for (const line of params.lines) {
         await this.sql`
@@ -583,15 +626,15 @@ export abstract class AccountingRepository {
     if (journalEntryRefs.length === 0) {
       return;
     }
-    
+
     const placeholders = journalEntryRefs.map(() => '?').join(', ');
-    
+
     // Delete journal entry lines first
     await this.rawSql(`
       DELETE FROM journal_entry_line 
       WHERE journal_entry_ref IN (${placeholders})
     `, journalEntryRefs);
-    
+
     // Then delete the journal entries
     await this.rawSql(`
       DELETE FROM journal_entry 
@@ -608,25 +651,25 @@ export abstract class AccountingRepository {
       WHERE ref = ${journalEntryRef} 
       AND post_time IS NOT NULL
     `;
-    
+
     if (originalEntry.length === 0) {
       throw new Error(`Journal entry ${journalEntryRef} not found or not posted`);
     }
-    
+
     // Get the original lines
     const originalLines = await this.sql<{ account_code: number; debit: number; credit: number }>`
       SELECT account_code, debit, credit 
       FROM journal_entry_line 
       WHERE journal_entry_ref = ${journalEntryRef}
     `;
-    
+
     // Create reversal lines (swap debit and credit)
     const reversalLines: JournalEntryLine[] = originalLines.map(line => ({
       accountCode: line.account_code,
       debit: line.credit,
       credit: line.debit,
     }));
-    
+
     // Create the reversal journal entry
     const reversalDescription = description || `Reversal of journal entry ${journalEntryRef}`;
     const reversalRef = await this.draftJournalEntry({
@@ -635,20 +678,20 @@ export abstract class AccountingRepository {
       lines: reversalLines,
       idempotentKey: reversalIdempotentKey,
     });
-    
+
     // Update reversal references
     await this.sql`
       UPDATE journal_entry 
       SET reversal_of_ref = ${journalEntryRef} 
       WHERE ref = ${reversalRef}
     `;
-    
+
     await this.sql`
       UPDATE journal_entry 
       SET reversed_by_ref = ${reversalRef} 
       WHERE ref = ${journalEntryRef}
     `;
-    
+
     return reversalRef;
   }
 
@@ -751,7 +794,7 @@ export abstract class AccountingRepository {
 
   async getLatestTrialBalance(fromDate?: string): Promise<TrialBalanceReport | null> {
     const reportTime = fromDate ? new Date(fromDate).getTime() : Date.now();
-    
+
     // First get the latest report_time
     const latestReportResult = await this.sql<{ report_time: number }>`
       SELECT report_time
@@ -760,13 +803,13 @@ export abstract class AccountingRepository {
       ORDER BY report_time DESC
       LIMIT 1
     `;
-    
+
     if (latestReportResult.length === 0) {
       return null;
     }
-    
+
     const latestReportTime = latestReportResult[0].report_time;
-    
+
     // Then get all lines for that report
     const reportResult = await this.sql`
       SELECT
@@ -782,7 +825,7 @@ export abstract class AccountingRepository {
       WHERE tb.report_time = ${latestReportTime}
       ORDER BY tb.account_code
     `;
-    
+
     if (reportResult.length === 0) {
       return null;
     }
@@ -811,9 +854,9 @@ export abstract class AccountingRepository {
     };
   }
 
-  async getLatestBalanceSheet(fromDate?: string): Promise<BalanceSheetReport | null> {
-    const reportTime = fromDate ? new Date(fromDate).getTime() : Date.now();
-    
+  async getLatestBalanceSheet(fromDate?: Date): Promise<BalanceSheetReport | null> {
+    const reportTime = fromDate instanceof Date ? fromDate.getTime() : Date.now();
+
     // First get the latest report_time
     const latestReportResult = await this.sql<{ report_time: number }>`
       SELECT report_time
@@ -822,13 +865,13 @@ export abstract class AccountingRepository {
       ORDER BY report_time DESC
       LIMIT 1
     `;
-    
+
     if (latestReportResult.length === 0) {
       return null;
     }
-    
+
     const latestReportTime = latestReportResult[0].report_time;
-    
+
     // Then get all lines for that report
     const reportResult = await this.sql`
       SELECT
@@ -844,7 +887,7 @@ export abstract class AccountingRepository {
       WHERE bs.report_time = ${latestReportTime}
       ORDER BY bs.classification, bs.category, bs.account_code
     `;
-    
+
     if (reportResult.length === 0) {
       return null;
     }

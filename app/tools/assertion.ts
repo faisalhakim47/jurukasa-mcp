@@ -39,3 +39,9 @@ export function assertPropString(value: unknown, propName: string, message?: str
     throw new Error(message || `Property "${propName}" is not a string`);
   }
 }
+
+export function assertPropNullableNumber(value: unknown, propName: string, message?: string): asserts value is Record<string, number | null> {
+  if (typeof value !== 'object' || value === null || !(propName in value) || ((value as Record<string, unknown>)[propName] !== null && typeof (value as Record<string, unknown>)[propName] !== 'number')) {
+    throw new Error(message || `Property "${propName}" is not a number or null`);
+  }
+}

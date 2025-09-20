@@ -3,9 +3,7 @@ import { defineSqliteAccountingSchemaMCPResource } from '@app/mcp-server/resourc
 import { defineSetManyAccountTagsMCPTool, defineUnsetManyAccountTagsMCPTool } from '@app/mcp-server/tools/account-tags.js';
 import { 
   defineManageManyAccountsMCPTool,
-  defineGetChartOfAccountsMCPTool,
-  defineRenameAccountMCPTool,
-  defineSetControlAccountMCPTool 
+  defineViewChartOfAccountsMCPTool
 } from '@app/mcp-server/tools/account-management.js';
 import { 
   defineDeleteManyJournalEntryDraftsMCPTool, 
@@ -35,9 +33,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
 
   // Register account management tools
   defineManageManyAccountsMCPTool(server, repo);
-  defineRenameAccountMCPTool(server, repo);
-  defineSetControlAccountMCPTool(server, repo);
-  defineGetChartOfAccountsMCPTool(server, repo);
+  defineViewChartOfAccountsMCPTool(server, repo);
 
   // Register account tagging tools
   defineSetManyAccountTagsMCPTool(server, repo);
