@@ -65,8 +65,8 @@ suite('AccountTagsMCPTools', function () {
         name: 'SetManyAccountTags',
         arguments: {
           accountTags: [
-            { code: 100, tag: 'Asset' },
-            { code: 200, tag: 'Revenue' },
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:200, tag: 'Revenue' },
           ],
         },
       });
@@ -107,9 +107,9 @@ suite('AccountTagsMCPTools', function () {
         name: 'SetManyAccountTags',
         arguments: {
           accountTags: [
-            { code: 100, tag: 'Current Asset' },
-            { code: 100, tag: 'Asset' },
-            { code: 100, tag: 'Cash Flow - Cash Equivalents' },
+            { accountCode:100, tag: 'Current Asset' },
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:100, tag: 'Cash Flow - Cash Equivalents' },
           ],
         },
       });
@@ -128,9 +128,9 @@ suite('AccountTagsMCPTools', function () {
         name: 'SetManyAccountTags',
         arguments: {
           accountTags: [
-            { code: 100, tag: 'Asset' },
-            { code: 100, tag: 'Current Asset' },
-            { code: 200, tag: 'Revenue' },
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:100, tag: 'Current Asset' },
+            { accountCode:200, tag: 'Revenue' },
           ],
         },
       });
@@ -141,8 +141,8 @@ suite('AccountTagsMCPTools', function () {
         name: 'UnsetManyAccountTags',
         arguments: {
           accountTags: [
-            { code: 100, tag: 'Asset' },
-            { code: 200, tag: 'Revenue' },
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:200, tag: 'Revenue' },
           ],
         },
       });
@@ -187,7 +187,7 @@ suite('AccountTagsMCPTools', function () {
         name: 'UnsetManyAccountTags',
         arguments: {
           accountTags: [
-            { code: 100, tag: 'NonExistent' },
+            { accountCode:100, tag: 'NonExistent' },
           ],
         },
       });
@@ -197,6 +197,63 @@ suite('AccountTagsMCPTools', function () {
       
       const responseText = (res.content[0] as { text: string }).text;
       ok(responseText.includes('Tag "NonExistent" removed from account 100'), 'should confirm removal attempt');
+    });
+  });
+
+  describe('Resource: Account Tags', function () {
+    it('lists resources in server resource list', async function () {
+      const resources = await client.listResources();
+      assertPropDefined(resources, 'resources');
+      assertArray(resources.resources);
+
+      const tagResources = resources.resources.filter(r => r.uri.startsWith('account-tags://'));
+      ok(tagResources.length === 2, 'should have 2 account tag resources');
+
+      const referenceResource = tagResources.find(r => r.uri === 'account-tags://reference');
+      const dataResource = tagResources.find(r => r.uri === 'account-tags://data');
+
+      ok(referenceResource, 'should have reference resource');
+      ok(dataResource, 'should have data resource');
+      ok(referenceResource?.mimeType === 'text/markdown', 'reference should be markdown');
+      ok(dataResource?.mimeType === 'application/json', 'data should be JSON');
+    });
+
+    it('provides account tags reference resource', async function () {
+      const res = await client.readResource({ uri: 'account-tags://reference' });
+      assertPropDefined(res, 'contents');
+      assertArray(res.contents);
+      ok(res.contents.length > 0, 'resource should have content');
+
+      const content = res.contents[0] as { mimeType: string; text: string };
+      ok(content.mimeType === 'text/markdown', 'should be markdown format');
+      ok(content.text.includes('# Predefined Account Tags Reference'), 'should contain title');
+      ok(content.text.includes('Asset'), 'should contain Asset tag');
+      ok(content.text.includes('Revenue'), 'should contain Revenue tag');
+      ok(content.text.includes('Cash Flow - Cash Equivalents'), 'should contain cash flow tags');
+      ok(content.text.includes('## Account Types'), 'should contain Account Types section');
+      ok(content.text.includes('## Cash Flow Statement Tags'), 'should contain Cash Flow section');
+      ok(content.text.includes('Total available tags: 42'), 'should show correct tag count');
+    });
+
+    it('provides account tags data resource', async function () {
+      const res = await client.readResource({ uri: 'account-tags://data' });
+      assertPropDefined(res, 'contents');
+      assertArray(res.contents);
+      ok(res.contents.length > 0, 'resource should have content');
+
+      const content = res.contents[0] as { mimeType: string; text: string };
+      ok(content.mimeType === 'application/json', 'should be JSON format');
+
+      const data = JSON.parse(content.text);
+      ok(data.accountTags, 'should have accountTags object');
+      ok(data.allTags, 'should have allTags array');
+      ok(data.totalCount === 42, 'should have exactly 42 tags');
+      ok(Array.isArray(data.allTags), 'allTags should be an array');
+      ok(data.allTags.includes('Asset'), 'should contain Asset tag');
+      ok(data.allTags.includes('Revenue'), 'should contain Revenue tag');
+      ok(data.allTags.includes('Cash Flow - Cash Equivalents'), 'should contain cash flow tags');
+      ok(data.categories.includes('Account Types'), 'should include Account Types category');
+      ok(data.categories.includes('Cash Flow Statement Tags'), 'should include Cash Flow category');
     });
   });
 });

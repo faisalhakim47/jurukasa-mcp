@@ -5,11 +5,11 @@ import z from 'zod/v3';
 export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('SetManyAccountTags', {
     title: 'Set many account tags',
-    description: 'Set tags for multiple accounts. Each account can have multiple tags.',
+    description: 'Set tags for multiple accounts. Each account can have multiple tags. Use the account-tags://reference resource to see all valid tag values.',
     inputSchema: {
       accountTags: z.array(z.object({
         accountCode: z.number(),
-        tag: z.string().describe('Tag is predefined string enum constant. Get it from '),
+        tag: z.string().describe('Tag is predefined string enum constant. Get valid tags from the account-tags://reference resource.'),
       })),
     },
   }, async function (params) {
@@ -47,7 +47,7 @@ export function defineSetManyAccountTagsMCPTool(server: McpServer, repo: Account
 export function defineUnSetManyAccountTagsMCPTool(server: McpServer, repo: AccountingRepository) {
   server.registerTool('UnsetManyAccountTags', {
     title: 'Unset many account tags',
-    description: 'Remove tags from multiple accounts.',
+    description: 'Remove tags from multiple accounts. Use the account-tags://reference resource to see all valid tag values.',
     inputSchema: {
       accountTags: z.array(z.object({
         accountCode: z.number(),

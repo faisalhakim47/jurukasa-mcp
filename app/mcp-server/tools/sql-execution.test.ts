@@ -149,8 +149,8 @@ suite('SqlExecutionMCPTool', function () {
         name: 'SetManyAccountTags',
         arguments: {
           accountTags: [
-            { code: 100, tag: 'Asset' },
-            { code: 200, tag: 'Revenue' },
+            { accountCode: 100, tag: 'Asset' },
+            { accountCode: 200, tag: 'Revenue' },
           ],
         },
       });

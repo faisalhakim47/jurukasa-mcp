@@ -1,5 +1,6 @@
 import { AccountingRepository } from '@app/data/accounting-repository.js';
 import { defineSqliteAccountingSchemaMCPResource } from '@app/mcp-server/resources/sqlite-accounting-schema.js';
+import { defineAccountTagsMCPResource } from '@app/mcp-server/resources/account-tags.js';
 import { defineSetManyAccountTagsMCPTool, defineUnSetManyAccountTagsMCPTool } from '@app/mcp-server/tools/account-tags.js';
 import {
   defineManageManyAccountsMCPTool,
@@ -27,6 +28,7 @@ export function createAccountingMcpServer(repo: AccountingRepository): McpServer
 
   // Register resources
   defineSqliteAccountingSchemaMCPResource(server);
+  defineAccountTagsMCPResource(server);
 
   // Register account management tools
   defineManageManyAccountsMCPTool(server, repo);

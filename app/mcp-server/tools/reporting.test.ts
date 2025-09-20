@@ -63,7 +63,7 @@ suite('ReportingMCPTools', function () {
 
     // Create and post a journal entry to have non-zero balances
     const draftRes = await client.callTool({
-      name: 'draftJournalEntry',
+      name: 'RecordJournalEntry',
       arguments: {
         date: '2024-01-01',
         description: 'Initial setup entry',
@@ -77,12 +77,6 @@ suite('ReportingMCPTools', function () {
     const draftText = (draftRes.content[0] as { text: string }).text;
     const refMatch = draftText.match(/ref (\d+)/);
     assertDefined(refMatch, 'Should extract journal entry reference');
-    const entryRef = parseInt(refMatch[1]);
-
-    await client.callTool({
-      name: 'postJournalEntry',
-      arguments: { journalEntryRef: entryRef },
-    });
   });
 
   afterEach(async function () {
