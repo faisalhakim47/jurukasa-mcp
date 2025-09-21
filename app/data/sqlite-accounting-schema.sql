@@ -69,40 +69,40 @@ INSERT OR IGNORE INTO user_config (key, value, description, created_at, updated_
 -- ==========================================================================
 
 -- Account master - core of the accounting system
-CREATE TABLE IF NOT EXISTS account (
-  code INTEGER PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS accounts (
+  account_code INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   normal_balance INTEGER NOT NULL CHECK (normal_balance IN (0, 1)), -- 0 = debit, 1 = credit
   balance INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   is_posting_account INTEGER NOT NULL DEFAULT 1 CHECK (is_posting_account IN (0, 1)),
-  control_account_code INTEGER REFERENCES account (code) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  control_account_code INTEGER REFERENCES accounts (account_code) ON UPDATE RESTRICT ON DELETE RESTRICT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  CHECK (control_account_code IS NULL OR control_account_code != code)
+  CHECK (control_account_code IS NULL OR control_account_code != account_code)
 ) STRICT; -- EOS
 
-CREATE INDEX IF NOT EXISTS account_name_index ON account (name); -- EOS
-CREATE INDEX IF NOT EXISTS account_active_index ON account (is_active, code) WHERE is_active = 1; -- EOS
-CREATE INDEX IF NOT EXISTS account_posting_index ON account (is_posting_account, code) WHERE is_posting_account = 1; -- EOS
-CREATE INDEX IF NOT EXISTS account_parent_index ON account (control_account_code) WHERE control_account_code IS NOT NULL; -- EOS
-CREATE INDEX IF NOT EXISTS account_balance_index ON account (balance) WHERE balance != 0; -- EOS
+CREATE INDEX IF NOT EXISTS accounts_name_index ON accounts (name); -- EOS
+CREATE INDEX IF NOT EXISTS accounts_active_index ON accounts (is_active, account_code) WHERE is_active = 1; -- EOS
+CREATE INDEX IF NOT EXISTS accounts_posting_index ON accounts (is_posting_account, account_code) WHERE is_posting_account = 1; -- EOS
+CREATE INDEX IF NOT EXISTS accounts_parent_index ON accounts (control_account_code) WHERE control_account_code IS NOT NULL; -- EOS
+CREATE INDEX IF NOT EXISTS accounts_balance_index ON accounts (balance) WHERE balance != 0; -- EOS
 
 -- Prevent assigning a control_account_code to an account when the target
 -- control account has non-zero posted journal entry totals. The control
 -- account must be zeroed-out (no net posted debit/credit) before it can be
 -- used as a parent/control account.
-DROP TRIGGER IF EXISTS account_control_set_on_insert_validation_trigger; -- EOS
-CREATE TRIGGER account_control_set_on_insert_validation_trigger
-BEFORE INSERT ON account FOR EACH ROW
+DROP TRIGGER IF EXISTS accounts_control_set_on_insert_validation_trigger; -- EOS
+CREATE TRIGGER accounts_control_set_on_insert_validation_trigger
+BEFORE INSERT ON accounts FOR EACH ROW
 WHEN NEW.control_account_code IS NOT NULL
 BEGIN
   SELECT
     CASE
       WHEN (
         SELECT COALESCE(SUM(jel.debit) - SUM(jel.credit), 0)
-        FROM journal_entry_line jel
-        JOIN journal_entry je ON je.ref = jel.journal_entry_ref
+        FROM journal_entry_lines jel
+        JOIN journal_entries je ON je.ref = jel.journal_entry_ref
         WHERE jel.account_code = NEW.control_account_code
           AND je.post_time IS NOT NULL
       ) != 0
@@ -110,17 +110,17 @@ BEGIN
     END;
 END; -- EOS
 
-DROP TRIGGER IF EXISTS account_control_set_on_update_validation_trigger; -- EOS
-CREATE TRIGGER account_control_set_on_update_validation_trigger
-BEFORE UPDATE ON account FOR EACH ROW
+DROP TRIGGER IF EXISTS accounts_control_set_on_update_validation_trigger; -- EOS
+CREATE TRIGGER accounts_control_set_on_update_validation_trigger
+BEFORE UPDATE ON accounts FOR EACH ROW
 WHEN NEW.control_account_code IS NOT NULL AND (OLD.control_account_code IS NULL OR NEW.control_account_code != OLD.control_account_code)
 BEGIN
   SELECT
     CASE
       WHEN (
         SELECT COALESCE(SUM(jel.debit) - SUM(jel.credit), 0)
-        FROM journal_entry_line jel
-        JOIN journal_entry je ON je.ref = jel.journal_entry_ref
+        FROM journal_entry_lines jel
+        JOIN journal_entries je ON je.ref = jel.journal_entry_ref
         WHERE jel.account_code = NEW.control_account_code
           AND je.post_time IS NOT NULL
       ) != 0
@@ -134,57 +134,57 @@ END; -- EOS
 --   mark the old parent as posting (1).
 -- - When a child is deleted, update the parent's is_posting_account accordingly.
 
-DROP TRIGGER IF EXISTS account_child_insert_trigger; -- EOS
-CREATE TRIGGER account_child_insert_trigger
-AFTER INSERT ON account FOR EACH ROW
+DROP TRIGGER IF EXISTS accounts_child_insert_trigger; -- EOS
+CREATE TRIGGER accounts_child_insert_trigger
+AFTER INSERT ON accounts FOR EACH ROW
 WHEN NEW.control_account_code IS NOT NULL
 BEGIN
-  UPDATE account
+  UPDATE accounts
   SET is_posting_account = 0,
       updated_at = NEW.updated_at
-  WHERE code = NEW.control_account_code
+  WHERE account_code = NEW.control_account_code
     AND is_posting_account != 0;
 END; -- EOS
 
-DROP TRIGGER IF EXISTS account_child_update_trigger; -- EOS
-CREATE TRIGGER account_child_update_trigger
-AFTER UPDATE OF control_account_code ON account FOR EACH ROW
+DROP TRIGGER IF EXISTS accounts_child_update_trigger; -- EOS
+CREATE TRIGGER accounts_child_update_trigger
+AFTER UPDATE OF control_account_code ON accounts FOR EACH ROW
 BEGIN
   -- Update old parent: if it now has no children, mark it as posting (1), otherwise keep non-posting (0)
-  UPDATE account
+  UPDATE accounts
   SET is_posting_account = CASE WHEN (
-      SELECT COUNT(1) FROM account a WHERE a.control_account_code = OLD.control_account_code
+      SELECT COUNT(1) FROM accounts a WHERE a.control_account_code = OLD.control_account_code
     ) > 0 THEN 0 ELSE 1 END,
     updated_at = NEW.updated_at
-  WHERE code = OLD.control_account_code
+  WHERE account_code = OLD.control_account_code
     AND OLD.control_account_code IS NOT NULL;
 
   -- Update new parent: ensure it's marked as non-posting (0)
-  UPDATE account
+  UPDATE accounts
   SET is_posting_account = 0,
       updated_at = NEW.updated_at
-  WHERE code = NEW.control_account_code
+  WHERE account_code = NEW.control_account_code
     AND NEW.control_account_code IS NOT NULL
     AND is_posting_account != 0;
 END; -- EOS
 
-DROP TRIGGER IF EXISTS account_child_delete_trigger; -- EOS
-CREATE TRIGGER account_child_delete_trigger
-AFTER DELETE ON account FOR EACH ROW
+DROP TRIGGER IF EXISTS accounts_child_delete_trigger; -- EOS
+CREATE TRIGGER accounts_child_delete_trigger
+AFTER DELETE ON accounts FOR EACH ROW
 WHEN OLD.control_account_code IS NOT NULL
 BEGIN
-  UPDATE account
+  UPDATE accounts
   SET is_posting_account = CASE WHEN (
-      SELECT COUNT(1) FROM account a WHERE a.control_account_code = OLD.control_account_code
+      SELECT COUNT(1) FROM accounts a WHERE a.control_account_code = OLD.control_account_code
     ) > 0 THEN 0 ELSE 1 END,
     updated_at = strftime('%s','now')
-  WHERE code = OLD.control_account_code;
+  WHERE account_code = OLD.control_account_code;
 END; -- EOS
 
 
 -- Account classification and reporting tags
-CREATE TABLE IF NOT EXISTS account_tag (
-  account_code INTEGER NOT NULL REFERENCES account (code) ON UPDATE RESTRICT ON DELETE RESTRICT,
+CREATE TABLE IF NOT EXISTS account_tags (
+  account_code INTEGER NOT NULL REFERENCES accounts (account_code) ON UPDATE RESTRICT ON DELETE RESTRICT,
   tag TEXT NOT NULL CHECK (tag IN (
     -- Account Types
     'Asset',
@@ -243,43 +243,43 @@ CREATE TABLE IF NOT EXISTS account_tag (
   PRIMARY KEY (account_code, tag)
 ) STRICT, WITHOUT ROWID; -- EOS
 
-CREATE INDEX IF NOT EXISTS account_tag_account_index ON account_tag (account_code); -- EOS
-CREATE INDEX IF NOT EXISTS account_tag_tag_index ON account_tag (tag); -- EOS
-CREATE INDEX IF NOT EXISTS account_tag_tag_account_index ON account_tag (tag, account_code); -- EOS
+CREATE INDEX IF NOT EXISTS account_tags_account_index ON account_tags (account_code); -- EOS
+CREATE INDEX IF NOT EXISTS account_tags_tag_index ON account_tags (tag); -- EOS
+CREATE INDEX IF NOT EXISTS account_tags_tag_account_index ON account_tags (tag, account_code); -- EOS
 
 -- ==========================================================================
 -- JOURNAL ENTRIES AND TRANSACTIONS
 -- ==========================================================================
 
 -- Journal entry header
-CREATE TABLE IF NOT EXISTS journal_entry (
+CREATE TABLE IF NOT EXISTS journal_entries (
   ref INTEGER PRIMARY KEY AUTOINCREMENT,
   entry_time INTEGER NOT NULL,
   note TEXT,
   post_time INTEGER,
-  fiscal_year_begin_time INTEGER REFERENCES fiscal_year (begin_time) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  fiscal_year_begin_time INTEGER REFERENCES fiscal_years (begin_time) ON UPDATE RESTRICT ON DELETE RESTRICT,
   source_type TEXT DEFAULT 'Manual' CHECK (source_type IN ('Manual', 'LLM Generated', 'System Generated')),
   source_reference TEXT,
   created_by TEXT DEFAULT 'User' CHECK (created_by IN ('User', 'System', 'Migration')),
-  reversal_of_ref INTEGER REFERENCES journal_entry (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
-  reversed_by_ref INTEGER REFERENCES journal_entry (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  reversal_of_ref INTEGER REFERENCES journal_entries (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  reversed_by_ref INTEGER REFERENCES journal_entries (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
   idempotent_key TEXT
 ) STRICT; -- EOS
 
-CREATE INDEX IF NOT EXISTS journal_entry_entry_time_index ON journal_entry (entry_time); -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_entry_time_post_time_index ON journal_entry (entry_time, post_time); -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_post_time_not_null_index ON journal_entry (post_time) WHERE post_time IS NOT NULL; -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_post_time_ref_index ON journal_entry (post_time, ref) WHERE post_time IS NOT NULL; -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_ref_post_time_index ON journal_entry(ref, post_time); -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_fiscal_year_index ON journal_entry (fiscal_year_begin_time) WHERE fiscal_year_begin_time IS NOT NULL; -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_source_type_index ON journal_entry (source_type, entry_time); -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_reversal_index ON journal_entry (reversal_of_ref) WHERE reversal_of_ref IS NOT NULL; -- EOS
-CREATE UNIQUE INDEX IF NOT EXISTS journal_entry_idempotent_key_index ON journal_entry (idempotent_key) WHERE idempotent_key IS NOT NULL; -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_entry_time_index ON journal_entries (entry_time); -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_entry_time_post_time_index ON journal_entries (entry_time, post_time); -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_post_time_not_null_index ON journal_entries (post_time) WHERE post_time IS NOT NULL; -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_post_time_ref_index ON journal_entries (post_time, ref) WHERE post_time IS NOT NULL; -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_ref_post_time_index ON journal_entries(ref, post_time); -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_fiscal_year_index ON journal_entries (fiscal_year_begin_time) WHERE fiscal_year_begin_time IS NOT NULL; -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_source_type_index ON journal_entries (source_type, entry_time); -- EOS
+CREATE INDEX IF NOT EXISTS journal_entries_reversal_index ON journal_entries (reversal_of_ref) WHERE reversal_of_ref IS NOT NULL; -- EOS
+CREATE UNIQUE INDEX IF NOT EXISTS journal_entries_idempotent_key_index ON journal_entries (idempotent_key) WHERE idempotent_key IS NOT NULL; -- EOS
 
 -- Journal entry validation trigger
-DROP TRIGGER IF EXISTS journal_entry_insert_validation_trigger; -- EOS
-CREATE TRIGGER journal_entry_insert_validation_trigger
-BEFORE INSERT ON journal_entry FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entries_insert_validation_trigger; -- EOS
+CREATE TRIGGER journal_entries_insert_validation_trigger
+BEFORE INSERT ON journal_entries FOR EACH ROW
 BEGIN
   -- Ensure entry time is valid
   SELECT
@@ -289,9 +289,9 @@ BEGIN
 END; -- EOS
 
 -- Prevent deletion of posted journal entries
-DROP TRIGGER IF EXISTS journal_entry_delete_prevention_trigger; -- EOS
-CREATE TRIGGER journal_entry_delete_prevention_trigger
-BEFORE DELETE ON journal_entry FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entries_delete_prevention_trigger; -- EOS
+CREATE TRIGGER journal_entries_delete_prevention_trigger
+BEFORE DELETE ON journal_entries FOR EACH ROW
 BEGIN
   SELECT
     CASE
@@ -300,10 +300,10 @@ BEGIN
 END; -- EOS
 
 -- Journal entry line items
-CREATE TABLE IF NOT EXISTS journal_entry_line (
-  journal_entry_ref INTEGER NOT NULL REFERENCES journal_entry (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
+CREATE TABLE IF NOT EXISTS journal_entry_lines (
+  journal_entry_ref INTEGER NOT NULL REFERENCES journal_entries (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
   line_number INTEGER NOT NULL,
-  account_code INTEGER NOT NULL REFERENCES account (code) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  account_code INTEGER NOT NULL REFERENCES accounts (account_code) ON UPDATE RESTRICT ON DELETE RESTRICT,
   debit INTEGER NOT NULL DEFAULT 0,
   credit INTEGER NOT NULL DEFAULT 0,
   description TEXT, -- Line-specific description
@@ -313,105 +313,105 @@ CREATE TABLE IF NOT EXISTS journal_entry_line (
   CHECK (debit > 0 OR credit > 0) -- At least one must be positive
 ) STRICT, WITHOUT ROWID; -- EOS
 
-CREATE INDEX IF NOT EXISTS journal_entry_line_account_debit_credit_index ON journal_entry_line (account_code, debit, credit); -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_line_journal_account_index ON journal_entry_line(account_code, journal_entry_ref); -- EOS
-CREATE INDEX IF NOT EXISTS journal_entry_line_ref_line_index ON journal_entry_line (journal_entry_ref, line_number); -- EOS
+CREATE INDEX IF NOT EXISTS journal_entry_lines_account_debit_credit_index ON journal_entry_lines (account_code, debit, credit); -- EOS
+CREATE INDEX IF NOT EXISTS journal_entry_lines_journal_account_index ON journal_entry_lines(account_code, journal_entry_ref); -- EOS
+CREATE INDEX IF NOT EXISTS journal_entry_lines_ref_line_index ON journal_entry_lines (journal_entry_ref, line_number); -- EOS
 
 -- Prevent creating or modifying journal entry lines that post directly to
 -- a control (parent) account. Posting must be done to posting (leaf)
 -- accounts only.
-DROP TRIGGER IF EXISTS journal_entry_line_control_account_insert_prevention_trigger; -- EOS
-CREATE TRIGGER journal_entry_line_control_account_insert_prevention_trigger
-BEFORE INSERT ON journal_entry_line FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entry_lines_control_account_insert_prevention_trigger; -- EOS
+CREATE TRIGGER journal_entry_lines_control_account_insert_prevention_trigger
+BEFORE INSERT ON journal_entry_lines FOR EACH ROW
 BEGIN
   SELECT
     CASE
       WHEN EXISTS(
-        SELECT 1 FROM account a WHERE a.control_account_code = NEW.account_code LIMIT 1
+        SELECT 1 FROM accounts a WHERE a.control_account_code = NEW.account_code LIMIT 1
       ) THEN RAISE(ABORT, 'Cannot post journal entry line to a control account on insert')
     END;
 END; -- EOS
 
-DROP TRIGGER IF EXISTS journal_entry_line_control_account_update_prevention_trigger; -- EOS
-CREATE TRIGGER journal_entry_line_control_account_update_prevention_trigger
-BEFORE UPDATE ON journal_entry_line FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entry_lines_control_account_update_prevention_trigger; -- EOS
+CREATE TRIGGER journal_entry_lines_control_account_update_prevention_trigger
+BEFORE UPDATE ON journal_entry_lines FOR EACH ROW
 BEGIN
   SELECT
     CASE
       WHEN EXISTS(
-        SELECT 1 FROM account a WHERE a.control_account_code = NEW.account_code LIMIT 1
+        SELECT 1 FROM accounts a WHERE a.control_account_code = NEW.account_code LIMIT 1
       ) THEN RAISE(ABORT, 'Cannot post journal entry line to a control account on update')
     END;
 END; -- EOS
 
 -- Validation trigger for posting journal entries
-DROP TRIGGER IF EXISTS journal_entry_post_validation_trigger; -- EOS
-CREATE TRIGGER journal_entry_post_validation_trigger
-BEFORE UPDATE ON journal_entry FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entries_post_validation_trigger; -- EOS
+CREATE TRIGGER journal_entries_post_validation_trigger
+BEFORE UPDATE ON journal_entries FOR EACH ROW
 WHEN new.post_time IS NOT NULL AND old.post_time IS NULL
 BEGIN
   -- Ensure journal entry balances
   SELECT
     CASE
-      WHEN (SELECT SUM(debit) - SUM(credit) FROM journal_entry_line WHERE journal_entry_ref = new.ref) != 0 
+      WHEN (SELECT SUM(debit) - SUM(credit) FROM journal_entry_lines WHERE journal_entry_ref = new.ref) != 0 
       THEN RAISE(ABORT, 'Journal entry does not balance')
-      WHEN (SELECT COUNT(*) FROM journal_entry_line WHERE journal_entry_ref = new.ref) < 2 
+      WHEN (SELECT COUNT(*) FROM journal_entry_lines WHERE journal_entry_ref = new.ref) < 2 
       THEN RAISE(ABORT, 'Journal entry must have at least 2 lines')
     END;
 END; -- EOS
 
 -- Update account balances when journal entry is posted
-DROP TRIGGER IF EXISTS journal_entry_post_account_trigger; -- EOS
-CREATE TRIGGER journal_entry_post_account_trigger
-AFTER UPDATE ON journal_entry FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entries_post_account_trigger; -- EOS
+CREATE TRIGGER journal_entries_post_account_trigger
+AFTER UPDATE ON journal_entries FOR EACH ROW
 WHEN old.post_time IS NULL AND new.post_time IS NOT NULL
 BEGIN
-  UPDATE account
+  UPDATE accounts
   SET balance = balance + (
     SELECT COALESCE(SUM(
-      CASE account.normal_balance
+      CASE accounts.normal_balance
         WHEN 0 THEN jel.debit - jel.credit  -- Debit normal: add debits, subtract credits
         WHEN 1 THEN jel.credit - jel.debit  -- Credit normal: add credits, subtract debits
       END
     ), 0)
-    FROM journal_entry_line jel
-    WHERE jel.journal_entry_ref = new.ref AND jel.account_code = account.code
+    FROM journal_entry_lines jel
+    WHERE jel.journal_entry_ref = new.ref AND jel.account_code = accounts.account_code
   ),
   updated_at = new.post_time
-  WHERE account.code IN (
+  WHERE accounts.account_code IN (
     SELECT DISTINCT account_code
-    FROM journal_entry_line
+    FROM journal_entry_lines
     WHERE journal_entry_ref = new.ref
   );
 END; -- EOS
 
 -- Prevent modification of posted journal entry lines
-DROP TRIGGER IF EXISTS journal_entry_line_update_prevention_trigger; -- EOS
-CREATE TRIGGER journal_entry_line_update_prevention_trigger
-BEFORE UPDATE ON journal_entry_line FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entry_lines_update_prevention_trigger; -- EOS
+CREATE TRIGGER journal_entry_lines_update_prevention_trigger
+BEFORE UPDATE ON journal_entry_lines FOR EACH ROW
 BEGIN
   SELECT
     CASE
-      WHEN (SELECT post_time FROM journal_entry WHERE ref = old.journal_entry_ref) IS NOT NULL 
+      WHEN (SELECT post_time FROM journal_entries WHERE ref = old.journal_entry_ref) IS NOT NULL 
       THEN RAISE(ABORT, 'Cannot modify lines of posted journal entry')
     END;
 END; -- EOS
 
 -- Prevent deletion of posted journal entry lines
-DROP TRIGGER IF EXISTS journal_entry_line_delete_prevention_trigger; -- EOS
-CREATE TRIGGER journal_entry_line_delete_prevention_trigger
-BEFORE DELETE ON journal_entry_line FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entry_lines_delete_prevention_trigger; -- EOS
+CREATE TRIGGER journal_entry_lines_delete_prevention_trigger
+BEFORE DELETE ON journal_entry_lines FOR EACH ROW
 BEGIN
   SELECT
     CASE
-      WHEN (SELECT post_time FROM journal_entry WHERE ref = old.journal_entry_ref) IS NOT NULL 
+      WHEN (SELECT post_time FROM journal_entries WHERE ref = old.journal_entry_ref) IS NOT NULL 
       THEN RAISE(ABORT, 'Cannot delete lines of posted journal entry')
     END;
 END; -- EOS
 
 -- Auto-number journal entry lines for easier insertion
-DROP VIEW IF EXISTS journal_entry_line_auto_number; -- EOS
-CREATE VIEW journal_entry_line_auto_number AS
+DROP VIEW IF EXISTS journal_entry_lines_auto_number; -- EOS
+CREATE VIEW journal_entry_lines_auto_number AS
 SELECT
   jel.journal_entry_ref,
   jel.line_number,
@@ -420,14 +420,14 @@ SELECT
   jel.credit,
   jel.description,
   jel.reference
-FROM journal_entry_line jel; -- EOS
+FROM journal_entry_lines jel; -- EOS
 
 -- Auto-numbering trigger for journal entry lines
-DROP TRIGGER IF EXISTS journal_entry_line_auto_number_trigger; -- EOS
-CREATE TRIGGER journal_entry_line_auto_number_trigger
-INSTEAD OF INSERT ON journal_entry_line_auto_number FOR EACH ROW
+DROP TRIGGER IF EXISTS journal_entry_lines_auto_number_trigger; -- EOS
+CREATE TRIGGER journal_entry_lines_auto_number_trigger
+INSTEAD OF INSERT ON journal_entry_lines_auto_number FOR EACH ROW
 BEGIN
-  INSERT INTO journal_entry_line (
+  INSERT INTO journal_entry_lines (
     journal_entry_ref,
     line_number,
     account_code,
@@ -439,7 +439,7 @@ BEGIN
   VALUES (
     new.journal_entry_ref,
     COALESCE(
-      (SELECT MAX(line_number) + 1 FROM journal_entry_line WHERE journal_entry_ref = new.journal_entry_ref),
+      (SELECT MAX(line_number) + 1 FROM journal_entry_lines WHERE journal_entry_ref = new.journal_entry_ref),
       1
     ),
     new.account_code,
@@ -466,9 +466,9 @@ SELECT
   jel.credit,
   jel.description,
   jel.reference
-FROM journal_entry_line jel
-JOIN journal_entry je ON je.ref = jel.journal_entry_ref
-JOIN account a ON a.code = jel.account_code
+FROM journal_entry_lines jel
+JOIN journal_entries je ON je.ref = jel.journal_entry_ref
+JOIN accounts a ON a.account_code = jel.account_code
 WHERE je.post_time IS NOT NULL
 ORDER BY je.ref ASC, jel.line_number ASC; -- EOS
 
@@ -477,31 +477,31 @@ ORDER BY je.ref ASC, jel.line_number ASC; -- EOS
 -- ==========================================================================
 
 -- Fiscal year periods
-CREATE TABLE IF NOT EXISTS fiscal_year (
+CREATE TABLE IF NOT EXISTS fiscal_years (
   begin_time INTEGER NOT NULL PRIMARY KEY,
   end_time INTEGER NOT NULL,
   post_time INTEGER,
-  closing_journal_entry_ref INTEGER REFERENCES journal_entry (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  closing_journal_entry_ref INTEGER REFERENCES journal_entries (ref) ON UPDATE RESTRICT ON DELETE RESTRICT,
   name TEXT, -- 'FY2024', 'Q1 2024', etc.
   is_closed INTEGER NOT NULL DEFAULT 0 CHECK (is_closed IN (0, 1)),
   CHECK (begin_time < end_time)
 ) STRICT; -- EOS
 
-CREATE INDEX IF NOT EXISTS fiscal_year_end_time_index ON fiscal_year (end_time); -- EOS
-CREATE INDEX IF NOT EXISTS fiscal_year_begin_end_time_index ON fiscal_year (begin_time, end_time); -- EOS
-CREATE INDEX IF NOT EXISTS fiscal_year_post_time_index ON fiscal_year (post_time) WHERE post_time IS NOT NULL; -- EOS
-CREATE INDEX IF NOT EXISTS fiscal_year_closed_index ON fiscal_year (is_closed, begin_time); -- EOS
+CREATE INDEX IF NOT EXISTS fiscal_years_end_time_index ON fiscal_years (end_time); -- EOS
+CREATE INDEX IF NOT EXISTS fiscal_years_begin_end_time_index ON fiscal_years (begin_time, end_time); -- EOS
+CREATE INDEX IF NOT EXISTS fiscal_years_post_time_index ON fiscal_years (post_time) WHERE post_time IS NOT NULL; -- EOS
+CREATE INDEX IF NOT EXISTS fiscal_years_closed_index ON fiscal_years (is_closed, begin_time); -- EOS
 
 -- Fiscal year validation trigger
-DROP TRIGGER IF EXISTS fiscal_year_insert_validation_trigger; -- EOS
-CREATE TRIGGER fiscal_year_insert_validation_trigger
-BEFORE INSERT ON fiscal_year FOR EACH ROW
+DROP TRIGGER IF EXISTS fiscal_years_insert_validation_trigger; -- EOS
+CREATE TRIGGER fiscal_years_insert_validation_trigger
+BEFORE INSERT ON fiscal_years FOR EACH ROW
 BEGIN
   -- Prevent overlapping fiscal years
   SELECT
     CASE
       WHEN EXISTS (
-        SELECT 1 FROM fiscal_year 
+        SELECT 1 FROM fiscal_years 
         WHERE (new.begin_time < end_time AND new.end_time > begin_time)
       ) THEN RAISE(ABORT, 'Fiscal year periods cannot overlap')
     END;
@@ -517,16 +517,16 @@ BEGIN
 END; -- EOS
 
 -- Prevent posting if there are unbalanced entries
-DROP TRIGGER IF EXISTS fiscal_year_post_validation_trigger; -- EOS
-CREATE TRIGGER fiscal_year_post_validation_trigger
-BEFORE UPDATE ON fiscal_year FOR EACH ROW
+DROP TRIGGER IF EXISTS fiscal_years_post_validation_trigger; -- EOS
+CREATE TRIGGER fiscal_years_post_validation_trigger
+BEFORE UPDATE ON fiscal_years FOR EACH ROW
 WHEN new.post_time IS NOT NULL AND old.post_time IS NULL
 BEGIN
   SELECT
     CASE
       WHEN EXISTS (
-        SELECT 1 FROM journal_entry je
-        LEFT JOIN journal_entry_line jel ON jel.journal_entry_ref = je.ref
+        SELECT 1 FROM journal_entries je
+        LEFT JOIN journal_entry_lines jel ON jel.journal_entry_ref = je.ref
         WHERE je.entry_time > new.begin_time 
           AND je.entry_time <= new.end_time
           AND je.post_time IS NULL
@@ -540,7 +540,7 @@ CREATE VIEW fiscal_year_account_mutation AS
 SELECT
   fy.begin_time,
   fy.end_time,
-  a.code AS account_code,
+  a.account_code AS account_code,
   a.name AS account_name,
   a.normal_balance,
   COALESCE(SUM(jes.debit), 0) AS sum_of_debit,
@@ -551,24 +551,24 @@ SELECT
       WHEN 1 THEN jes.credit - jes.debit  -- Credit normal balance
     END
   ), 0) AS net_change
-FROM fiscal_year fy
-CROSS JOIN account a
+FROM fiscal_years fy
+CROSS JOIN accounts a
 LEFT JOIN journal_entry_summary jes
   ON jes.entry_time > fy.begin_time
   AND jes.entry_time <= fy.end_time
-  AND jes.account_code = a.code
+  AND jes.account_code = a.account_code
 WHERE a.is_active = 1
-GROUP BY fy.begin_time, a.code
+GROUP BY fy.begin_time, a.account_code
 HAVING sum_of_debit != 0 OR sum_of_credit != 0; -- EOS
 
 -- Automated fiscal year closing trigger
-DROP TRIGGER IF EXISTS fiscal_year_post_account_trigger; -- EOS
-CREATE TRIGGER fiscal_year_post_account_trigger
-AFTER UPDATE ON fiscal_year FOR EACH ROW
+DROP TRIGGER IF EXISTS fiscal_years_post_account_trigger; -- EOS
+CREATE TRIGGER fiscal_years_post_account_trigger
+AFTER UPDATE ON fiscal_years FOR EACH ROW
 WHEN old.post_time IS NULL AND new.post_time IS NOT NULL
 BEGIN
   -- Create comprehensive closing entry
-  INSERT INTO journal_entry (entry_time, note, fiscal_year_begin_time, source_type, created_by)
+  INSERT INTO journal_entries (entry_time, note, fiscal_year_begin_time, source_type, created_by)
   VALUES (
     new.end_time, 
     'FY' || strftime('%Y', datetime(new.end_time, 'unixepoch')) || ' Closing Entry',
@@ -578,10 +578,10 @@ BEGIN
   );
 
   -- Revenue closing entries: debit revenue accounts to zero their credit balances
-  INSERT INTO journal_entry_line_auto_number (journal_entry_ref, account_code, debit, credit)
+  INSERT INTO journal_entry_lines_auto_number (journal_entry_ref, account_code, debit, credit)
   SELECT 
     last_insert_rowid(),
-    a.code,
+    a.account_code,
     -- Debit side: if account has an effective debit balance to offset, or if credit-normal revenue has positive balance
     CASE
       WHEN a.normal_balance = 0 AND a.balance < 0 THEN ABS(a.balance)   -- debit-normal but has negative (credit) balance -> debit to offset
@@ -594,16 +594,16 @@ BEGIN
       WHEN a.normal_balance = 1 AND a.balance < 0 THEN ABS(a.balance)   -- credit-normal but negative (debit) balance -> credit to offset
       ELSE 0
     END
-  FROM account a
-  JOIN account_tag at ON at.account_code = a.code
+  FROM accounts a
+  JOIN account_tags at ON at.account_code = a.account_code
   WHERE at.tag = 'Fiscal Year Closing - Revenue'
     AND a.balance != 0;
 
   -- Expense closing entries: credit expense accounts to zero their debit balances
-  INSERT INTO journal_entry_line_auto_number (journal_entry_ref, account_code, debit, credit)
+  INSERT INTO journal_entry_lines_auto_number (journal_entry_ref, account_code, debit, credit)
   SELECT 
     last_insert_rowid(),
-    a.code,
+    a.account_code,
     -- Debit side: if expense account currently has a credit (negative) balance -> debit to offset
     CASE
       WHEN a.normal_balance = 0 AND a.balance < 0 THEN ABS(a.balance)
@@ -616,16 +616,16 @@ BEGIN
       WHEN a.normal_balance = 1 AND a.balance < 0 THEN ABS(a.balance)
       ELSE 0
     END -- Credit to zero existing balance
-  FROM account a
-  JOIN account_tag at ON at.account_code = a.code
+  FROM accounts a
+  JOIN account_tags at ON at.account_code = a.account_code
   WHERE at.tag = 'Fiscal Year Closing - Expense'
     AND a.balance != 0;
 
   -- Dividend closing entries: credit dividend accounts to zero their debit balances
-  INSERT INTO journal_entry_line_auto_number (journal_entry_ref, account_code, debit, credit)
+  INSERT INTO journal_entry_lines_auto_number (journal_entry_ref, account_code, debit, credit)
   SELECT 
     last_insert_rowid(),
-    a.code,
+    a.account_code,
     CASE
       WHEN a.normal_balance = 0 AND a.balance < 0 THEN ABS(a.balance)
       WHEN a.normal_balance = 1 AND a.balance > 0 THEN a.balance
@@ -636,13 +636,13 @@ BEGIN
       WHEN a.normal_balance = 1 AND a.balance < 0 THEN ABS(a.balance)
       ELSE 0
     END -- Credit to zero existing balance
-  FROM account a
-  JOIN account_tag at ON at.account_code = a.code
+  FROM accounts a
+  JOIN account_tags at ON at.account_code = a.account_code
   WHERE at.tag = 'Fiscal Year Closing - Dividend'
     AND a.balance != 0;
 
   -- Calculate net income for retained earnings balancing
-  INSERT INTO journal_entry_line_auto_number (journal_entry_ref, account_code, debit, credit)
+  INSERT INTO journal_entry_lines_auto_number (journal_entry_ref, account_code, debit, credit)
   SELECT 
     last_insert_rowid(),
     re.account_code,
@@ -657,35 +657,35 @@ BEGIN
           ELSE 0
         END
       ), 0) AS net_income
-    FROM account a
-    JOIN account_tag at ON at.account_code = a.code
+    FROM accounts a
+    JOIN account_tags at ON at.account_code = a.account_code
     WHERE at.tag IN ('Fiscal Year Closing - Revenue', 'Fiscal Year Closing - Expense', 'Fiscal Year Closing - Dividend')
   ) calc
   CROSS JOIN (
-    SELECT code as account_code 
-    FROM account 
-    WHERE code IN (SELECT account_code FROM account_tag WHERE tag = 'Fiscal Year Closing - Retained Earning')
+    SELECT account_code as account_code 
+    FROM accounts 
+    WHERE account_code IN (SELECT account_code FROM account_tags WHERE tag = 'Fiscal Year Closing - Retained Earning')
     LIMIT 1
   ) re
   WHERE calc.net_income != 0;
 
   -- Post the closing entry if it has at least 2 lines, otherwise delete it
-  UPDATE journal_entry 
+  UPDATE journal_entries 
   SET post_time = new.end_time
   WHERE ref = last_insert_rowid()
-    AND (SELECT COUNT(*) FROM journal_entry_line WHERE journal_entry_ref = last_insert_rowid()) >= 2;
+    AND (SELECT COUNT(*) FROM journal_entry_lines WHERE journal_entry_ref = last_insert_rowid()) >= 2;
 
-  DELETE FROM journal_entry
+  DELETE FROM journal_entries
   WHERE ref = last_insert_rowid()
-    AND (SELECT COUNT(*) FROM journal_entry_line WHERE journal_entry_ref = last_insert_rowid()) < 2;
+    AND (SELECT COUNT(*) FROM journal_entry_lines WHERE journal_entry_ref = last_insert_rowid()) < 2;
 
   -- Store closing journal entry reference if it exists
-  UPDATE fiscal_year
+  UPDATE fiscal_years
   SET 
     closing_journal_entry_ref = (
-      SELECT ref FROM journal_entry 
+      SELECT ref FROM journal_entries 
       WHERE ref = last_insert_rowid() 
-        AND EXISTS (SELECT 1 FROM journal_entry_line WHERE journal_entry_ref = last_insert_rowid())
+        AND EXISTS (SELECT 1 FROM journal_entry_lines WHERE journal_entry_ref = last_insert_rowid())
     ),
     is_closed = 1
   WHERE begin_time = new.begin_time 
@@ -697,31 +697,31 @@ END; -- EOS
 -- ==========================================================================
 
 -- Balance report generation
-CREATE TABLE IF NOT EXISTS balance_report (
+CREATE TABLE IF NOT EXISTS balance_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   report_time INTEGER NOT NULL,
   report_type TEXT NOT NULL DEFAULT 'Period End' CHECK (report_type IN ('Period End', 'Monthly', 'Quarterly', 'Annual', 'Ad Hoc')),
-  fiscal_year_begin_time INTEGER REFERENCES fiscal_year (begin_time) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  fiscal_year_begin_time INTEGER REFERENCES fiscal_years (begin_time) ON UPDATE RESTRICT ON DELETE RESTRICT,
   name TEXT, -- Human-readable report name
   created_at INTEGER NOT NULL
 ) STRICT; -- EOS
 
-CREATE INDEX IF NOT EXISTS balance_report_report_time_index ON balance_report (report_time); -- EOS
-CREATE INDEX IF NOT EXISTS balance_report_id_time_index ON balance_report (id, report_time); -- EOS
-CREATE INDEX IF NOT EXISTS balance_report_type_time_index ON balance_report (report_type, report_time); -- EOS
+CREATE INDEX IF NOT EXISTS balance_reports_report_time_index ON balance_reports (report_time); -- EOS
+CREATE INDEX IF NOT EXISTS balance_reports_id_time_index ON balance_reports (id, report_time); -- EOS
+CREATE INDEX IF NOT EXISTS balance_reports_type_time_index ON balance_reports (report_type, report_time); -- EOS
 
 -- Trial balance line items
-CREATE TABLE IF NOT EXISTS trial_balance_line (
-  balance_report_id INTEGER NOT NULL REFERENCES balance_report (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-  account_code INTEGER NOT NULL REFERENCES account (code) ON UPDATE RESTRICT ON DELETE RESTRICT,
+CREATE TABLE IF NOT EXISTS trial_balance_lines (
+  balance_report_id INTEGER NOT NULL REFERENCES balance_reports (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  account_code INTEGER NOT NULL REFERENCES accounts (account_code) ON UPDATE RESTRICT ON DELETE RESTRICT,
   debit INTEGER NOT NULL,
   credit INTEGER NOT NULL,
   PRIMARY KEY (balance_report_id, account_code),
   CHECK (debit >= 0 AND credit >= 0)
 ) STRICT, WITHOUT ROWID; -- EOS
 
-CREATE INDEX IF NOT EXISTS trial_balance_line_report_id_index ON trial_balance_line (balance_report_id); -- EOS
-CREATE INDEX IF NOT EXISTS trial_balance_line_account_debit_credit_index ON trial_balance_line (account_code, debit, credit); -- EOS
+CREATE INDEX IF NOT EXISTS trial_balance_lines_report_id_index ON trial_balance_lines (balance_report_id); -- EOS
+CREATE INDEX IF NOT EXISTS trial_balance_lines_account_debit_credit_index ON trial_balance_lines (account_code, debit, credit); -- EOS
 
 -- Trial balance view
 DROP VIEW IF EXISTS trial_balance; -- EOS
@@ -736,17 +736,17 @@ SELECT
   a.normal_balance,
   tbl.debit,
   tbl.credit
-FROM balance_report br
-JOIN trial_balance_line tbl ON tbl.balance_report_id = br.id
-JOIN account a ON a.code = tbl.account_code
+FROM balance_reports br
+JOIN trial_balance_lines tbl ON tbl.balance_report_id = br.id
+JOIN accounts a ON a.account_code = tbl.account_code
 ORDER BY br.report_time DESC, tbl.account_code; -- EOS
 
 -- Auto-generate trial balance when balance report is created
 DROP TRIGGER IF EXISTS trial_balance_generation_trigger; -- EOS
 CREATE TRIGGER trial_balance_generation_trigger
-AFTER INSERT ON balance_report FOR EACH ROW
+AFTER INSERT ON balance_reports FOR EACH ROW
 BEGIN
-  INSERT INTO trial_balance_line (
+  INSERT INTO trial_balance_lines (
     balance_report_id,
     account_code,
     debit,
@@ -754,7 +754,7 @@ BEGIN
   )
   SELECT
     new.id,
-    a.code,
+    a.account_code,
     CASE 
       WHEN a.balance >= 0 AND a.normal_balance = 0 THEN a.balance  -- Debit normal, positive balance
       WHEN a.balance < 0 AND a.normal_balance = 1 THEN ABS(a.balance)  -- Credit normal, negative balance (shown as debit)
@@ -765,7 +765,7 @@ BEGIN
       WHEN a.balance < 0 AND a.normal_balance = 0 THEN ABS(a.balance)  -- Debit normal, negative balance (shown as credit)
       ELSE 0 
     END AS credit
-  FROM account a
+  FROM accounts a
   WHERE a.is_active = 1;
 END; -- EOS
 
@@ -774,9 +774,9 @@ END; -- EOS
 -- ==========================================================================
 
 -- Balance sheet line items
-CREATE TABLE IF NOT EXISTS balance_sheet_line (
-  balance_report_id INTEGER NOT NULL REFERENCES balance_report (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-  account_code INTEGER NOT NULL REFERENCES account (code) ON UPDATE RESTRICT ON DELETE RESTRICT,
+CREATE TABLE IF NOT EXISTS balance_sheet_lines (
+  balance_report_id INTEGER NOT NULL REFERENCES balance_reports (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  account_code INTEGER NOT NULL REFERENCES accounts (account_code) ON UPDATE RESTRICT ON DELETE RESTRICT,
   classification TEXT NOT NULL CHECK (classification IN ('Assets', 'Liabilities', 'Equity')),
   category TEXT NOT NULL CHECK (category IN (
     'Current Assets', 'Non-Current Assets', 
@@ -787,9 +787,9 @@ CREATE TABLE IF NOT EXISTS balance_sheet_line (
   PRIMARY KEY (balance_report_id, account_code)
 ) STRICT, WITHOUT ROWID; -- EOS
 
-CREATE INDEX IF NOT EXISTS balance_sheet_line_report_id_index ON balance_sheet_line (balance_report_id); -- EOS
-CREATE INDEX IF NOT EXISTS balance_sheet_line_classification_category_index ON balance_sheet_line (classification, category, account_code); -- EOS
-CREATE INDEX IF NOT EXISTS balance_sheet_line_report_classification_index ON balance_sheet_line (balance_report_id, classification, category); -- EOS
+CREATE INDEX IF NOT EXISTS balance_sheet_lines_report_id_index ON balance_sheet_lines (balance_report_id); -- EOS
+CREATE INDEX IF NOT EXISTS balance_sheet_lines_classification_category_index ON balance_sheet_lines (classification, category, account_code); -- EOS
+CREATE INDEX IF NOT EXISTS balance_sheet_lines_report_classification_index ON balance_sheet_lines (balance_report_id, classification, category); -- EOS
 
 -- Balance sheet view
 DROP VIEW IF EXISTS balance_sheet; -- EOS
@@ -804,17 +804,17 @@ SELECT
   bsl.account_code,
   a.name AS account_name,
   bsl.amount
-FROM balance_report br
-JOIN balance_sheet_line bsl ON bsl.balance_report_id = br.id
-JOIN account a ON a.code = bsl.account_code
+FROM balance_reports br
+JOIN balance_sheet_lines bsl ON bsl.balance_report_id = br.id
+JOIN accounts a ON a.account_code = bsl.account_code
 ORDER BY br.report_time DESC, bsl.classification, bsl.category, bsl.account_code; -- EOS
 
 -- Auto-generate balance sheet when balance report is created
 DROP TRIGGER IF EXISTS balance_sheet_generation_trigger; -- EOS
 CREATE TRIGGER balance_sheet_generation_trigger
-AFTER INSERT ON balance_report FOR EACH ROW
+AFTER INSERT ON balance_reports FOR EACH ROW
 BEGIN
-  INSERT INTO balance_sheet_line (
+  INSERT INTO balance_sheet_lines (
     balance_report_id,
     account_code,
     classification,
@@ -823,7 +823,7 @@ BEGIN
   )
   SELECT
     new.id,
-    a.code,
+    a.account_code,
     CASE 
       WHEN at.tag IN ('Balance Sheet - Current Asset', 'Balance Sheet - Non-Current Asset') THEN 'Assets'
       WHEN at.tag IN ('Balance Sheet - Current Liability', 'Balance Sheet - Non-Current Liability') THEN 'Liabilities'
@@ -837,15 +837,15 @@ BEGIN
       WHEN at.tag = 'Balance Sheet - Equity' THEN 'Equity'
     END AS category,
     a.balance AS amount
-  FROM account a
-  JOIN account_tag at ON at.account_code = a.code
+  FROM accounts a
+  JOIN account_tags at ON at.account_code = a.account_code
   WHERE a.is_active = 1 
     AND at.tag IN (
       'Balance Sheet - Current Asset', 'Balance Sheet - Non-Current Asset',
       'Balance Sheet - Current Liability', 'Balance Sheet - Non-Current Liability',
       'Balance Sheet - Equity'
     )
-  ORDER BY a.code ASC;
+  ORDER BY a.account_code ASC;
 END; -- EOS
 
 -- ==========================================================================
@@ -877,8 +877,8 @@ SELECT
   fyam.end_time,
   fy.name AS fiscal_year_name
 FROM fiscal_year_account_mutation fyam
-JOIN account_tag at ON at.account_code = fyam.account_code
-JOIN fiscal_year fy ON fy.begin_time = fyam.begin_time
+JOIN account_tags at ON at.account_code = fyam.account_code
+JOIN fiscal_years fy ON fy.begin_time = fyam.begin_time
 WHERE fyam.net_change != 0
   AND at.tag IN (
     'Income Statement - Revenue',
@@ -895,28 +895,28 @@ ORDER BY fyam.begin_time DESC, classification, category, fyam.account_code; -- E
 -- ==========================================================================
 
 -- Cash flow reporting tables
-CREATE TABLE IF NOT EXISTS cashflow_report (
+CREATE TABLE IF NOT EXISTS cashflow_reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   report_time INTEGER NOT NULL,
   begin_time INTEGER NOT NULL,
   end_time INTEGER NOT NULL,
-  fiscal_year_begin_time INTEGER REFERENCES fiscal_year (begin_time) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  fiscal_year_begin_time INTEGER REFERENCES fiscal_years (begin_time) ON UPDATE RESTRICT ON DELETE RESTRICT,
   name TEXT,
   created_at INTEGER NOT NULL,
   CHECK (begin_time < end_time)
 ) STRICT; -- EOS
 
-CREATE TABLE IF NOT EXISTS cashflow_statement_line (
-  cashflow_report_id INTEGER NOT NULL REFERENCES cashflow_report (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+CREATE TABLE IF NOT EXISTS cashflow_statement_lines (
+  cashflow_report_id INTEGER NOT NULL REFERENCES cashflow_reports (id) ON UPDATE RESTRICT ON DELETE RESTRICT,
   activity_type TEXT NOT NULL CHECK (activity_type IN ('Operating', 'Investing', 'Financing')),
   line_description TEXT NOT NULL,
   amount INTEGER NOT NULL,
   PRIMARY KEY (cashflow_report_id, activity_type, line_description)
 ) STRICT, WITHOUT ROWID; -- EOS
 
-CREATE INDEX IF NOT EXISTS cashflow_statement_line_report_id_index ON cashflow_statement_line (cashflow_report_id); -- EOS
-CREATE INDEX IF NOT EXISTS cashflow_statement_line_activity_index ON cashflow_statement_line (activity_type, line_description); -- EOS
-CREATE INDEX IF NOT EXISTS cashflow_report_time_range_index ON cashflow_report (report_time, begin_time, end_time); -- EOS
+CREATE INDEX IF NOT EXISTS cashflow_statement_lines_report_id_index ON cashflow_statement_lines (cashflow_report_id); -- EOS
+CREATE INDEX IF NOT EXISTS cashflow_statement_lines_activity_index ON cashflow_statement_lines (activity_type, line_description); -- EOS
+CREATE INDEX IF NOT EXISTS cashflow_reports_time_range_index ON cashflow_reports (report_time, begin_time, end_time); -- EOS
 
 -- Cash flow statement view
 DROP VIEW IF EXISTS cashflow_statement; -- EOS
@@ -930,8 +930,8 @@ SELECT
   csl.activity_type,
   csl.line_description,
   csl.amount
-FROM cashflow_report cr
-JOIN cashflow_statement_line csl ON csl.cashflow_report_id = cr.id
+FROM cashflow_reports cr
+JOIN cashflow_statement_lines csl ON csl.cashflow_report_id = cr.id
 ORDER BY cr.report_time DESC,
   CASE csl.activity_type
     WHEN 'Operating' THEN 1

@@ -29,7 +29,7 @@ export function defineManageManyAccountsMCPTool(server: McpServer, repo: Account
     const results: Array<string> = [];
 
     for (const account of params.accounts) {
-      const existingAccount = existingAccounts.find(a => a.code === account.accountCode);
+      const existingAccount = existingAccounts.find(a => a.accountCode === account.accountCode);
       if (existingAccount) {
         if (existingAccount.normalBalance === account.normalBalance) {
           try {
@@ -100,7 +100,7 @@ export function defineViewChartOfAccountsMCPTool(server: McpServer, repo: Accoun
     const userConfig = await repo.getUserConfig();
     const chartOfAccountToAsciiHierarchy = function (account: ChartOfAccount): AsciiHierarcy {
       return {
-        label: `account ${account.code} "${account.name}" — (balance: ${formatCurrency(account.balance ?? 0, userConfig)}, normal balance: ${account.normalBalance})`,
+        label: `account ${account.accountCode} "${account.name}" — (balance: ${formatCurrency(account.balance ?? 0, userConfig)}, normal balance: ${account.normalBalance})`,
         children: account.children ? account.children.map(chartOfAccountToAsciiHierarchy) : [],
       };
     };

@@ -59,7 +59,7 @@ export function defineGetLatestBalanceSheetMCPTool(server: McpServer, repo: Acco
       };
     }
     const userConfig = await repo.getUserConfig();
-    const report = await repo.viewLatestBalanceSheet(formDate.toISOString());
+    const report = await repo.viewLatestBalanceSheet(formDate?.toISOString());
     if (!report) {
       return {
         content: [{ type: 'text', text: 'No balance sheet reports found. Please create accounts first using ManageManyAccounts, tag them for balance sheet reporting using SetManyAccountTags, then generate a financial report using GenerateFinancialReport.' }],

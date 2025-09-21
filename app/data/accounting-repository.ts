@@ -10,7 +10,7 @@ export type UserConfig = {
 };
 
 type Account = {
-  code: number;
+  accountCode: number;
   name: string;
   normalBalance: 'debit' | 'credit';
   balance: number;
@@ -19,7 +19,7 @@ type Account = {
 }
 
 type AccountInput = {
-  code: number;
+  accountCode: number;
   name: string;
   normalBalance?: 'debit' | 'credit';
   controlAccountCode?: Account | null;
@@ -30,7 +30,7 @@ type ChartOfAccountQuery = {
 };
 
 export type ChartOfAccount = {
-  code: number;
+  accountCode: number;
   name: string;
   normalBalance: 'debit' | 'credit';
   balance: number;
@@ -177,32 +177,32 @@ export abstract class AccountingRepository {
   async ensureManyAccounts(accounts: AccountInput[]): Promise<void> {
     for (const account of accounts) {
       if (account.normalBalance !== undefined && account.controlAccountCode !== undefined) {
-        await this.sql`INSERT INTO account (code, name, normal_balance, control_account_code, is_active, created_at, updated_at) VALUES (${account.code}, ${account.name}, ${account.normalBalance === 'debit' ? 0 : 1}, ${account.controlAccountCode ? account.controlAccountCode.code : null}, ${1}, ${0}, ${0}) ON CONFLICT(code) DO NOTHING`;
+        await this.sql`INSERT INTO accounts (account_code, name, normal_balance, control_account_code, is_active, created_at, updated_at) VALUES (${account.accountCode}, ${account.name}, ${account.normalBalance === 'debit' ? 0 : 1}, ${account.controlAccountCode ? account.controlAccountCode.accountCode : null}, ${1}, ${0}, ${0}) ON CONFLICT(account_code) DO NOTHING`;
       } else if (account.normalBalance !== undefined) {
-        await this.sql`INSERT INTO account (code, name, normal_balance, is_active, created_at, updated_at) VALUES (${account.code}, ${account.name}, ${account.normalBalance === 'debit' ? 0 : 1}, ${1}, ${0}, ${0}) ON CONFLICT(code) DO NOTHING`;
+        await this.sql`INSERT INTO accounts (account_code, name, normal_balance, is_active, created_at, updated_at) VALUES (${account.accountCode}, ${account.name}, ${account.normalBalance === 'debit' ? 0 : 1}, ${1}, ${0}, ${0}) ON CONFLICT(account_code) DO NOTHING`;
       } else if (account.controlAccountCode !== undefined) {
-        await this.sql`INSERT INTO account (code, name, control_account_code, is_active, created_at, updated_at) VALUES (${account.code}, ${account.name}, ${account.controlAccountCode ? account.controlAccountCode.code : null}, ${1}, ${0}, ${0}) ON CONFLICT(code) DO NOTHING`;
+        await this.sql`INSERT INTO accounts (account_code, name, control_account_code, is_active, created_at, updated_at) VALUES (${account.accountCode}, ${account.name}, ${account.controlAccountCode ? account.controlAccountCode.accountCode : null}, ${1}, ${0}, ${0}) ON CONFLICT(account_code) DO NOTHING`;
       } else {
-        await this.sql`INSERT INTO account (code, name, is_active, created_at, updated_at) VALUES (${account.code}, ${account.name}, ${1}, ${0}, ${0}) ON CONFLICT(code) DO NOTHING`;
+        await this.sql`INSERT INTO accounts (account_code, name, is_active, created_at, updated_at) VALUES (${account.accountCode}, ${account.name}, ${1}, ${0}, ${0}) ON CONFLICT(account_code) DO NOTHING`;
       }
     }
   }
 
-  async addAccount(code: number, name: string, normalBalance: 'debit' | 'credit'): Promise<void> {
-    await this.sql`INSERT INTO account (code, name, normal_balance, is_active, created_at, updated_at) VALUES (${code}, ${name}, ${normalBalance === 'debit' ? 0 : 1}, ${1}, ${0}, ${0})`;
+  async addAccount(accountCode: number, name: string, normalBalance: 'debit' | 'credit'): Promise<void> {
+    await this.sql`INSERT INTO accounts (account_code, name, normal_balance, is_active, created_at, updated_at) VALUES (${accountCode}, ${name}, ${normalBalance === 'debit' ? 0 : 1}, ${1}, ${0}, ${0})`;
   }
 
-  async setAccountName(code: number, name: string): Promise<void> {
-    await this.sql`UPDATE account SET name = ${name} WHERE code = ${code}`;
+  async setAccountName(accountCode: number, name: string): Promise<void> {
+    await this.sql`UPDATE accounts SET name = ${name} WHERE account_code = ${accountCode}`;
   }
 
-  async setControlAccount(code: number, controlAccountCode: number): Promise<void> {
-    await this.sql`UPDATE account SET control_account_code = ${controlAccountCode} WHERE code = ${code}`;
+  async setControlAccount(accountCode: number, controlAccountCode: number): Promise<void> {
+    await this.sql`UPDATE accounts SET control_account_code = ${controlAccountCode} WHERE account_code = ${accountCode}`;
   }
 
-  async updateAccount(code: number, updates?: AccountUpdateParams): Promise<void> {
+  async updateAccount(accountCode: number, updates?: AccountUpdateParams): Promise<void> {
     await this.sql`
-      UPDATE account SET
+      UPDATE accounts SET
         name = COALESCE(${updates?.name}, name),
         control_account_code = CASE
           WHEN ${updates?.controlCode} IS NOT NULL THEN ${updates?.controlCode}
@@ -213,7 +213,7 @@ export abstract class AccountingRepository {
           WHEN ${updates?.deactivate} = FALSE THEN 1
           ELSE is_active
         END
-      WHERE code = ${code}
+      WHERE account_code = ${accountCode}
     `;
   }
 
@@ -224,15 +224,15 @@ export abstract class AccountingRepository {
     // includeInactive is a numeric flag (0 or 1). When 0, only include active accounts (is_active = 1).
     // When 1, include all accounts regardless of is_active.
     const rows = await this.sql`
-      WITH RECURSIVE tree(code, name, normal_balance, balance, control_account_code, depth, path) AS (
-        SELECT code, name, normal_balance, balance, control_account_code, 0 AS depth, printf('%04d', code) as path
-        FROM account
+      WITH RECURSIVE tree(account_code, name, normal_balance, balance, control_account_code, depth, path) AS (
+        SELECT account_code, name, normal_balance, balance, control_account_code, 0 AS depth, printf('%04d', account_code) as path
+        FROM accounts
         WHERE (${includeInactive} = 1 OR is_active = 1)
           AND control_account_code IS NULL
         UNION ALL
-        SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, tree.depth + 1, tree.path || ',' || printf('%04d', a.code)
-        FROM account a
-        JOIN tree ON a.control_account_code = tree.code
+        SELECT a.account_code, a.name, a.normal_balance, a.balance, a.control_account_code, tree.depth + 1, tree.path || ',' || printf('%04d', a.account_code)
+        FROM accounts a
+        JOIN tree ON a.control_account_code = tree.account_code
       )
       SELECT * FROM tree ORDER BY path;
     `;
@@ -240,29 +240,29 @@ export abstract class AccountingRepository {
     // Build map of nodes
     const nodeMap = new Map<number, ChartOfAccount>();
     for (const row of rows) {
-      assertPropNumber(row, 'code', 'Account code is not a number');
+      assertPropNumber(row, 'account_code', 'Account account_code is not a number');
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
       const node: ChartOfAccount = {
-        code: row.code,
+        accountCode: row.account_code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
         children: [],
       };
-      nodeMap.set(row.code, node);
+      nodeMap.set(row.account_code, node);
     }
 
     // Attach children to parents and collect roots
     const roots: ChartOfAccount[] = [];
     for (const row of rows) {
-      assertPropNumber(row, 'code', 'Account code is not a number');
+      assertPropNumber(row, 'account_code', 'Account account_code is not a number');
       // control_account_code can be null for root accounts, so only assert if not null
       if (row.control_account_code !== null) {
         assertPropNumber(row, 'control_account_code', 'Account control_account_code is not a number');
       }
-      const node = nodeMap.get(row.code)!;
+      const node = nodeMap.get(row.account_code)!;
       if (row.control_account_code == null) {
         roots.push(node);
       } else {
@@ -287,11 +287,11 @@ export abstract class AccountingRepository {
       .map(function () { return '?'; })
       .join(', ');
     const result = await this.rawSql(`
-      SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
-      FROM account a
+      SELECT a.account_code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
+      FROM accounts a
       WHERE a.is_active = 1
         AND (
-          a.code IN (${placeholders})
+          a.account_code IN (${placeholders})
           OR a.name IN (${placeholders})
         )
     `, [
@@ -299,14 +299,14 @@ export abstract class AccountingRepository {
       ...codesOrNames,
     ]);
     return result.map(function (row) {
-      assertPropNumber(row, 'code', 'Account code is not a number');
+      assertPropNumber(row, 'account_code', 'Account account_code is not a number');
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
       assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
       assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
-        code: row.code,
+        accountCode: row.account_code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
@@ -316,8 +316,8 @@ export abstract class AccountingRepository {
     });
   }
 
-  async getManyAccountsByCodes(codes: number[]): Promise<Account[]> {
-    return await this.getManyAccountsByCodesOrNames(codes);
+  async getManyAccountsByCodes(accountCodes: number[]): Promise<Account[]> {
+    return await this.getManyAccountsByCodesOrNames(accountCodes);
   }
 
   async getManyAccountsByNames(names: string[]): Promise<Account[]> {
@@ -328,16 +328,16 @@ export abstract class AccountingRepository {
    * Fetch many accounts by inclusive OR across provided filters.
    * Any combination of the filters may be provided. If none are provided returns all active accounts.
    */
-  async getManyAccounts(filters: { codes?: number[]; names?: string[]; tags?: string[]; controlAccountCodes?: number[] } = {}): Promise<Account[]> {
-    const { codes, names, tags, controlAccountCodes } = filters;
+  async getManyAccounts(filters: { accountCodes?: number[]; names?: string[]; tags?: string[]; controlAccountCodes?: number[] } = {}): Promise<Account[]> {
+    const { accountCodes, names, tags, controlAccountCodes } = filters;
 
     const whereClauses: string[] = [];
     const params: unknown[] = [];
 
-    if (codes && codes.length > 0) {
-      const ph = codes.map(function () { return '?'; }).join(', ');
-      whereClauses.push(`a.code IN (${ph})`);
-      params.push(...codes);
+    if (accountCodes && accountCodes.length > 0) {
+      const ph = accountCodes.map(function () { return '?'; }).join(', ');
+      whereClauses.push(`a.account_code IN (${ph})`);
+      params.push(...accountCodes);
     }
 
     if (names && names.length > 0) {
@@ -355,36 +355,36 @@ export abstract class AccountingRepository {
     if (tags && tags.length > 0) {
       const ph = tags.map(function () { return '?'; }).join(', ');
       // use a subquery to filter accounts that have any of the provided tags
-      whereClauses.push(`a.code IN (SELECT account_code FROM account_tag WHERE tag IN (${ph}))`);
+      whereClauses.push(`a.account_code IN (SELECT account_code FROM account_tags WHERE tag IN (${ph}))`);
       params.push(...tags);
     }
 
     let sql: string;
     if (whereClauses.length > 0) {
       sql = `
-        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
-        FROM account a
+        SELECT DISTINCT a.account_code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
+        FROM accounts a
         WHERE ${whereClauses.join(' OR ')}
-        ORDER BY a.code
+        ORDER BY a.account_code
       `;
     } else {
       sql = `
-        SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
-        FROM account a
-        ORDER BY a.code
+        SELECT DISTINCT a.account_code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
+        FROM accounts a
+        ORDER BY a.account_code
       `;
     }
 
     const result = await this.rawSql(sql, params);
     return result.map(function (row) {
-      assertPropNumber(row, 'code', 'Account code is not a number');
+      assertPropNumber(row, 'account_code', 'Account account_code is not a number');
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
       assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
       assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
-        code: row.code,
+        accountCode: row.account_code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
@@ -396,11 +396,11 @@ export abstract class AccountingRepository {
 
   private async getAccountByCodeOrName(codeOrName: number | string): Promise<Account | null> {
     const result = await this.sql`
-      SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
-      FROM account a
+      SELECT a.account_code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
+      FROM accounts a
       WHERE a.is_active = 1
         AND (
-          a.code = ${isNaN(Number(codeOrName)) ? -1 : Number(codeOrName)}
+          a.account_code = ${isNaN(Number(codeOrName)) ? -1 : Number(codeOrName)}
           OR a.name = ${codeOrName}
         )
     `;
@@ -408,14 +408,14 @@ export abstract class AccountingRepository {
       return null;
     }
     const row = result[0];
-    assertPropNumber(row, 'code', 'Account code is not a number');
+    assertPropNumber(row, 'account_code', 'Account account_code is not a number');
     assertPropString(row, 'name', 'Account name is not a string');
     assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
     assertPropNumber(row, 'balance', 'Account balance is not a number');
     assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
     assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
     return {
-      code: row.code,
+      accountCode: row.account_code,
       name: row.name,
       normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
       balance: row.balance,
@@ -424,8 +424,8 @@ export abstract class AccountingRepository {
     };
   }
 
-  async getAccountByCode(code: number): Promise<Account | null> {
-    return await this.getAccountByCodeOrName(code);
+  async getAccountByCode(accountCode: number): Promise<Account | null> {
+    return await this.getAccountByCodeOrName(accountCode);
   }
 
   async getAccountByName(name: string): Promise<Account | null> {
@@ -434,22 +434,22 @@ export abstract class AccountingRepository {
 
   async getAccountsByTag(tag: string, offset: number, limit: number): Promise<Account[]> {
     const result = await this.sql`
-      SELECT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
-      FROM account a
-      JOIN account_tag at ON a.code = at.account_code
+      SELECT a.account_code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
+      FROM accounts a
+      JOIN account_tags at ON a.account_code = at.account_code
       WHERE a.is_active = 1 AND at.tag = ${tag}
-      ORDER BY a.code
+      ORDER BY a.account_code
       LIMIT ${limit} OFFSET ${offset}
     `;
     return result.map(function (row) {
-      assertPropNumber(row, 'code', 'Account code is not a number');
+      assertPropNumber(row, 'account_code', 'Account account_code is not a number');
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
       assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
       assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
-        code: row.code,
+        accountCode: row.account_code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
@@ -459,12 +459,12 @@ export abstract class AccountingRepository {
     });
   }
 
-  async setAccountTag(code: number, tag: string): Promise<void> {
-    await this.sql`INSERT OR REPLACE INTO account_tag (account_code, tag) VALUES (${code}, ${tag})`;
+  async setAccountTag(accountCode: number, tag: string): Promise<void> {
+    await this.sql`INSERT OR REPLACE INTO account_tags (account_code, tag) VALUES (${accountCode}, ${tag})`;
   }
 
-  async unsetAccountTag(code: number, tag: string): Promise<void> {
-    await this.sql`DELETE FROM account_tag WHERE account_code = ${code} AND tag = ${tag}`;
+  async unsetAccountTag(accountCode: number, tag: string): Promise<void> {
+    await this.sql`DELETE FROM account_tags WHERE account_code = ${accountCode} AND tag = ${tag}`;
   }
 
   async getManyAccountsByOneOfManyTags(tags: string[], offset: number, limit: number): Promise<Account[]> {
@@ -475,11 +475,11 @@ export abstract class AccountingRepository {
       .map(function () { return '?'; })
       .join(', ');
     const result = await this.rawSql(`
-      SELECT DISTINCT a.code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
-      FROM account a
-      JOIN account_tag at ON a.code = at.account_code
+      SELECT DISTINCT a.account_code, a.name, a.normal_balance, a.balance, a.control_account_code, a.is_active
+      FROM accounts a
+      JOIN account_tags at ON a.account_code = at.account_code
       WHERE a.is_active = 1 AND at.tag IN (${placeholders})
-      ORDER BY a.code
+      ORDER BY a.account_code
       LIMIT ? OFFSET ?
     `, [
       ...tags,
@@ -487,14 +487,14 @@ export abstract class AccountingRepository {
       offset,
     ]);
     return result.map(function (row) {
-      assertPropNumber(row, 'code', 'Account code is not a number');
+      assertPropNumber(row, 'account_code', 'Account account_code is not a number');
       assertPropString(row, 'name', 'Account name is not a string');
       assertPropNumber(row, 'normal_balance', 'Account normal_balance is not a number');
       assertPropNumber(row, 'balance', 'Account balance is not a number');
       assertPropNullableNumber(row, 'control_account_code', 'Account control_account_code is not a number');
       assertPropNullableNumber(row, 'is_active', 'Account is_active is not a number');
       return {
-        code: row.code,
+        accountCode: row.account_code,
         name: row.name,
         normalBalance: row.normal_balance === 0 ? 'debit' : 'credit',
         balance: row.balance,
@@ -507,24 +507,22 @@ export abstract class AccountingRepository {
   async SetManyAccountTags(input: Array<AccountTagInput>): Promise<void> {
     for (const item of input) {
       try {
-        await this.sql`INSERT OR REPLACE INTO account_tag (account_code, tag) VALUES (${item.accountCode}, ${item.tag})`;
+        await this.sql`INSERT OR REPLACE INTO account_tags (account_code, tag) VALUES (${item.accountCode}, ${item.tag})`;
       } catch (error) {
-        // If foreign key constraint fails (account doesn't exist), continue silently
-        // This allows the operation to complete gracefully for non-existent accounts
-        continue;
+        throw new Error(`Failed to set tag '${item.tag}' for account ${item.accountCode}: ${error}`);
       }
     }
   }
 
   async UnsetManyAccountTags(input: Array<AccountTagInput>): Promise<void> {
     for (const item of input) {
-      await this.sql`DELETE FROM account_tag WHERE account_code = ${item.accountCode} AND tag = ${item.tag}`;
+      await this.sql`DELETE FROM account_tags WHERE account_code = ${item.accountCode} AND tag = ${item.tag}`;
     }
   }
 
   async getExistingJournalEntryByIdempotentKey(idempotentKey: string): Promise<number | null> {
     const result = await this.sql<{ ref: number }>`
-      SELECT ref FROM journal_entry WHERE idempotent_key = ${idempotentKey}
+      SELECT ref FROM journal_entries WHERE idempotent_key = ${idempotentKey}
     `;
     if (result.length === 0) {
       return null;
@@ -537,15 +535,16 @@ export abstract class AccountingRepository {
     // Check if an entry with the same idempotent key already exists
     if (params.idempotentKey) {
       const existingEntry = await this.sql<{ ref: number }>`
-        SELECT ref FROM journal_entry WHERE idempotent_key = ${params.idempotentKey}
+        SELECT ref FROM journal_entries WHERE idempotent_key = ${params.idempotentKey}
       `;
       if (existingEntry.length > 0) {
+        assertPropNumber(existingEntry[0], 'ref', 'Journal entry ref is not a number');
         return existingEntry[0].ref;
       }
     }
 
     const result = await this.sql<{ ref: number }>`
-      INSERT INTO journal_entry (entry_time, note, post_time, idempotent_key)
+      INSERT INTO journal_entries (entry_time, note, post_time, idempotent_key)
       VALUES (${params.entryTime}, ${params.description || null}, NULL, ${params.idempotentKey || null})
       RETURNING ref
     `;
@@ -556,7 +555,7 @@ export abstract class AccountingRepository {
     for (const line of params.lines) {
       // use the auto-numbering view to insert lines and let the DB assign line_number
       await this.sql`
-        INSERT INTO journal_entry_line_auto_number (journal_entry_ref, account_code, debit, credit)
+        INSERT INTO journal_entry_lines_auto_number (journal_entry_ref, account_code, debit, credit)
         VALUES (${journalEntryId}, ${line.accountCode}, ${line.debit}, ${line.credit})
       `;
     }
@@ -566,7 +565,7 @@ export abstract class AccountingRepository {
   async postJournalEntry(journalEntryId: number, postTime: number): Promise<void> {
     // Check if the journal entry exists and its current status
     const entry = await this.sql<{ post_time: number | null }>`
-      SELECT post_time FROM journal_entry WHERE ref = ${journalEntryId}
+      SELECT post_time FROM journal_entries WHERE ref = ${journalEntryId}
     `;
 
     if (entry.length === 0) {
@@ -577,13 +576,13 @@ export abstract class AccountingRepository {
       throw new Error(`Journal entry ${journalEntryId} is already posted`);
     }
 
-    await this.sql`UPDATE journal_entry SET post_time = ${postTime} WHERE ref = ${journalEntryId}`;
+    await this.sql`UPDATE journal_entries SET post_time = ${postTime} WHERE ref = ${journalEntryId}`;
   }
 
   async updateJournalEntry(journalEntryRef: number, params: { entryTime?: number; description?: string | null; lines?: JournalEntryLine[]; idempotentKey?: string | null }): Promise<void> {
     // First check if the journal entry exists
     const entry = await this.sql<{ post_time: number | null }>`
-      SELECT post_time FROM journal_entry WHERE ref = ${journalEntryRef}
+      SELECT post_time FROM journal_entries WHERE ref = ${journalEntryRef}
     `;
 
     if (entry.length === 0) {
@@ -614,19 +613,19 @@ export abstract class AccountingRepository {
 
       if (updates.length > 0) {
         values.push(journalEntryRef);
-        await this.rawSql(`UPDATE journal_entry SET ${updates.join(', ')} WHERE ref = ?`, values);
+        await this.rawSql(`UPDATE journal_entries SET ${updates.join(', ')} WHERE ref = ?`, values);
       }
     }
 
     // Update lines if provided
     if (params.lines !== undefined) {
       // Delete existing lines
-      await this.sql`DELETE FROM journal_entry_line WHERE journal_entry_ref = ${journalEntryRef}`;
+      await this.sql`DELETE FROM journal_entry_lines WHERE journal_entry_ref = ${journalEntryRef}`;
 
       // Insert new lines
       for (const line of params.lines) {
         await this.sql`
-          INSERT INTO journal_entry_line_auto_number (journal_entry_ref, account_code, debit, credit)
+          INSERT INTO journal_entry_lines_auto_number (journal_entry_ref, account_code, debit, credit)
           VALUES (${journalEntryRef}, ${line.accountCode}, ${line.debit}, ${line.credit})
         `;
       }
@@ -642,13 +641,13 @@ export abstract class AccountingRepository {
 
     // Delete journal entry lines first
     await this.rawSql(`
-      DELETE FROM journal_entry_line 
+      DELETE FROM journal_entry_lines 
       WHERE journal_entry_ref IN (${placeholders})
     `, journalEntryRefs);
 
     // Then delete the journal entries
     await this.rawSql(`
-      DELETE FROM journal_entry 
+      DELETE FROM journal_entries 
       WHERE ref IN (${placeholders}) 
       AND post_time IS NULL
     `, journalEntryRefs);
@@ -658,7 +657,7 @@ export abstract class AccountingRepository {
     // Get the original journal entry
     const originalEntry = await this.sql<{ ref: number; entry_time: number; note: string | null }>`
       SELECT ref, entry_time, note 
-      FROM journal_entry 
+      FROM journal_entries 
       WHERE ref = ${journalEntryRef} 
       AND post_time IS NOT NULL
     `;
@@ -670,7 +669,7 @@ export abstract class AccountingRepository {
     // Get the original lines
     const originalLines = await this.sql<{ account_code: number; debit: number; credit: number }>`
       SELECT account_code, debit, credit 
-      FROM journal_entry_line 
+      FROM journal_entry_lines 
       WHERE journal_entry_ref = ${journalEntryRef}
     `;
 
@@ -692,13 +691,13 @@ export abstract class AccountingRepository {
 
     // Update reversal references
     await this.sql`
-      UPDATE journal_entry 
+      UPDATE journal_entries 
       SET reversal_of_ref = ${journalEntryRef} 
       WHERE ref = ${reversalRef}
     `;
 
     await this.sql`
-      UPDATE journal_entry 
+      UPDATE journal_entries 
       SET reversed_by_ref = ${reversalRef} 
       WHERE ref = ${journalEntryRef}
     `;
@@ -708,7 +707,7 @@ export abstract class AccountingRepository {
 
   async GenerateFinancialReport(reportTime: number): Promise<number> {
     const result = await this.sql<{ id: number }>`
-      INSERT INTO balance_report (report_time, report_type, name, created_at)
+      INSERT INTO balance_reports (report_time, report_type, name, created_at)
       VALUES (${reportTime}, 'Ad Hoc', ${'Ad Hoc Report'}, ${reportTime})
       RETURNING id
     `;
