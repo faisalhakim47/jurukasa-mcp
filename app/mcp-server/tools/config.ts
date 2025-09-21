@@ -12,7 +12,7 @@ const ALLOWED_CONFIG_KEYS = [
 ] as const;
 
 export function defineSetConfigMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('setConfig', {
+  server.registerTool('SetConfig', {
     title: 'Set user configuration',
     description: 'Update multiple user configuration settings. Only predefined keys are allowed.',
     inputSchema: {
@@ -55,11 +55,11 @@ export function defineSetConfigMCPTool(server: McpServer, repo: AccountingReposi
 }
 
 export function defineGetConfigMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getConfig', {
+  server.registerTool('GetConfig', {
     title: 'Get user configuration',
     description: 'Retrieve all user configuration settings.',
   }, async function (params) {
-    // params is unused for getConfig as it takes no input
+    // params is unused for GetConfig as it takes no input
     try {
       const result = await repo.sql`
         SELECT key, value FROM user_config ORDER BY key

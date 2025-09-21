@@ -40,12 +40,12 @@ suite('AccountTagsMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'ensureManyAccountsExist',
+      name: 'ManageManyAccounts',
       arguments: {
         accounts: [
-          { code: 100, name: 'Cash', normalBalance: 'debit' },
-          { code: 200, name: 'Revenue', normalBalance: 'credit' },
-          { code: 300, name: 'Equity', normalBalance: 'credit' },
+          { accountCode: 100, name: 'Cash', normalBalance: 'debit' },
+          { accountCode: 200, name: 'Revenue', normalBalance: 'credit' },
+          { accountCode: 300, name: 'Equity', normalBalance: 'credit' },
         ],
       },
     });
@@ -59,14 +59,14 @@ suite('AccountTagsMCPTools', function () {
     await repo.close();
   });
 
-  describe('Tool: setManyAccountTags', function () {
+  describe('Tool: SetManyAccountTags', function () {
     it('sets tags for multiple accounts', async function () {
       const res = await client.callTool({
-        name: 'setManyAccountTags',
+        name: 'SetManyAccountTags',
         arguments: {
-          taggedAccounts: [
-            { code: 100, tag: 'Asset' },
-            { code: 200, tag: 'Revenue' },
+          accountTags: [
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:200, tag: 'Revenue' },
           ],
         },
       });
@@ -80,7 +80,7 @@ suite('AccountTagsMCPTools', function () {
       
       // Verify tags were actually set by querying them
       const verifyRes = await client.callTool({
-        name: 'executeSqlQuery',
+        name: 'ExecuteSqlQuery',
         arguments: {
           query: 'SELECT account_code, tag FROM account_tag WHERE account_code IN (100, 200) ORDER BY account_code, tag',
         },
@@ -92,8 +92,8 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles empty tagged accounts list', async function () {
       const res = await client.callTool({
-        name: 'setManyAccountTags',
-        arguments: { taggedAccounts: [] },
+        name: 'SetManyAccountTags',
+        arguments: { accountTags: [] },
       });
       assertPropDefined(res, 'content');
       assertArray(res.content);
@@ -104,12 +104,12 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles multiple tags for same account', async function () {
       const res = await client.callTool({
-        name: 'setManyAccountTags',
+        name: 'SetManyAccountTags',
         arguments: {
-          taggedAccounts: [
-            { code: 100, tag: 'Current Asset' },
-            { code: 100, tag: 'Asset' },
-            { code: 100, tag: 'Cash Flow - Cash Equivalents' },
+          accountTags: [
+            { accountCode:100, tag: 'Current Asset' },
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:100, tag: 'Cash Flow - Cash Equivalents' },
           ],
         },
       });
@@ -121,16 +121,16 @@ suite('AccountTagsMCPTools', function () {
     });
   });
 
-  describe('Tool: unsetManyAccountTags', function () {
+  describe('Tool: UnsetManyAccountTags', function () {
     beforeEach(async function () {
       // Set up some tags first
       await client.callTool({
-        name: 'setManyAccountTags',
+        name: 'SetManyAccountTags',
         arguments: {
-          taggedAccounts: [
-            { code: 100, tag: 'Asset' },
-            { code: 100, tag: 'Current Asset' },
-            { code: 200, tag: 'Revenue' },
+          accountTags: [
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:100, tag: 'Current Asset' },
+            { accountCode:200, tag: 'Revenue' },
           ],
         },
       });
@@ -138,11 +138,11 @@ suite('AccountTagsMCPTools', function () {
 
     it('removes tags from multiple accounts', async function () {
       const res = await client.callTool({
-        name: 'unsetManyAccountTags',
+        name: 'UnsetManyAccountTags',
         arguments: {
-          taggedAccounts: [
-            { code: 100, tag: 'Asset' },
-            { code: 200, tag: 'Revenue' },
+          accountTags: [
+            { accountCode:100, tag: 'Asset' },
+            { accountCode:200, tag: 'Revenue' },
           ],
         },
       });
@@ -156,7 +156,7 @@ suite('AccountTagsMCPTools', function () {
       
       // Verify tags were actually removed
       const verifyRes = await client.callTool({
-        name: 'executeSqlQuery',
+        name: 'ExecuteSqlQuery',
         arguments: {
           query: 'SELECT account_code, tag FROM account_tag WHERE account_code IN (100, 200) ORDER BY account_code, tag',
         },
@@ -172,8 +172,8 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles empty tagged accounts list', async function () {
       const res = await client.callTool({
-        name: 'unsetManyAccountTags',
-        arguments: { taggedAccounts: [] },
+        name: 'UnsetManyAccountTags',
+        arguments: { accountTags: [] },
       });
       assertPropDefined(res, 'content');
       assertArray(res.content);
@@ -184,10 +184,10 @@ suite('AccountTagsMCPTools', function () {
 
     it('handles removal of non-existent tags gracefully', async function () {
       const res = await client.callTool({
-        name: 'unsetManyAccountTags',
+        name: 'UnsetManyAccountTags',
         arguments: {
-          taggedAccounts: [
-            { code: 100, tag: 'NonExistent' },
+          accountTags: [
+            { accountCode:100, tag: 'NonExistent' },
           ],
         },
       });
@@ -197,6 +197,63 @@ suite('AccountTagsMCPTools', function () {
       
       const responseText = (res.content[0] as { text: string }).text;
       ok(responseText.includes('Tag "NonExistent" removed from account 100'), 'should confirm removal attempt');
+    });
+  });
+
+  describe('Resource: Account Tags', function () {
+    it('lists resources in server resource list', async function () {
+      const resources = await client.listResources();
+      assertPropDefined(resources, 'resources');
+      assertArray(resources.resources);
+
+      const tagResources = resources.resources.filter(r => r.uri.startsWith('account-tags://'));
+      ok(tagResources.length === 2, 'should have 2 account tag resources');
+
+      const referenceResource = tagResources.find(r => r.uri === 'account-tags://reference');
+      const dataResource = tagResources.find(r => r.uri === 'account-tags://data');
+
+      ok(referenceResource, 'should have reference resource');
+      ok(dataResource, 'should have data resource');
+      ok(referenceResource?.mimeType === 'text/markdown', 'reference should be markdown');
+      ok(dataResource?.mimeType === 'application/json', 'data should be JSON');
+    });
+
+    it('provides account tags reference resource', async function () {
+      const res = await client.readResource({ uri: 'account-tags://reference' });
+      assertPropDefined(res, 'contents');
+      assertArray(res.contents);
+      ok(res.contents.length > 0, 'resource should have content');
+
+      const content = res.contents[0] as { mimeType: string; text: string };
+      ok(content.mimeType === 'text/markdown', 'should be markdown format');
+      ok(content.text.includes('# Predefined Account Tags Reference'), 'should contain title');
+      ok(content.text.includes('Asset'), 'should contain Asset tag');
+      ok(content.text.includes('Revenue'), 'should contain Revenue tag');
+      ok(content.text.includes('Cash Flow - Cash Equivalents'), 'should contain cash flow tags');
+      ok(content.text.includes('## Account Types'), 'should contain Account Types section');
+      ok(content.text.includes('## Cash Flow Statement Tags'), 'should contain Cash Flow section');
+      ok(content.text.includes('Total available tags: 42'), 'should show correct tag count');
+    });
+
+    it('provides account tags data resource', async function () {
+      const res = await client.readResource({ uri: 'account-tags://data' });
+      assertPropDefined(res, 'contents');
+      assertArray(res.contents);
+      ok(res.contents.length > 0, 'resource should have content');
+
+      const content = res.contents[0] as { mimeType: string; text: string };
+      ok(content.mimeType === 'application/json', 'should be JSON format');
+
+      const data = JSON.parse(content.text);
+      ok(data.accountTags, 'should have accountTags object');
+      ok(data.allTags, 'should have allTags array');
+      ok(data.totalCount === 42, 'should have exactly 42 tags');
+      ok(Array.isArray(data.allTags), 'allTags should be an array');
+      ok(data.allTags.includes('Asset'), 'should contain Asset tag');
+      ok(data.allTags.includes('Revenue'), 'should contain Revenue tag');
+      ok(data.allTags.includes('Cash Flow - Cash Equivalents'), 'should contain cash flow tags');
+      ok(data.categories.includes('Account Types'), 'should include Account Types category');
+      ok(data.categories.includes('Cash Flow Statement Tags'), 'should include Cash Flow category');
     });
   });
 });

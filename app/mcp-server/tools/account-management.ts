@@ -3,15 +3,17 @@ import { AsciiHierarcy, formatCurrency, renderAsciiHierarchy } from '@app/format
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
-export function defineEnsureManyAccountsExistMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('ensureManyAccountsExist', {
-    title: 'Ensure many accounts exist',
-    description: 'Check that multiple accounts exist by each code, creating any that are missing. This tool does not update existing accounts.',
+export function defineManageManyAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
+  server.registerTool('ManageManyAccounts', {
+    title: 'Multi-purpose account management tool',
+    description: 'Use this tool to create and or update (upsert) multiple accounts at once. This tool will create new accounts if they do not exist. This tool will update existing account names.',
     inputSchema: {
       accounts: z.array(z.object({
-        code: z.number(),
+        accountCode: z.number().describe('Primary identifier of an account.'),
         name: z.string(),
         normalBalance: z.enum(['debit', 'credit']),
+        controlAccountCode: z.number().optional().describe('If set, set control account code for chart of account hierarchy. Default is NULL.'),
+        deactivate: z.boolean().optional().describe('If true, deactivate/close the account. Default is false. Balance must be zero to deactivate/close an account.'),
       })),
     },
   }, async function (params) {
@@ -22,126 +24,93 @@ export function defineEnsureManyAccountsExistMCPTool(server: McpServer, repo: Ac
     }
 
     const userConfig = await repo.getUserConfig();
-    const existingAccounts = await repo.getManyAccountsByCodes(params.accounts.map(a => a.code));
+    const existingAccounts = await repo.getManyAccountsByCodes(params.accounts.map(a => a.accountCode));
 
     const results: Array<string> = [];
 
-    accountLoop:
     for (const account of params.accounts) {
-      const existingAccount = existingAccounts.find(a => a.code === account.code);
+      const existingAccount = existingAccounts.find(a => a.code === account.accountCode);
       if (existingAccount) {
-        results.push(`Existing account ${account.code} (${existingAccount.name}) already exists with balance of ${formatCurrency(existingAccount.balance ?? 0, userConfig)} and normal balance ${existingAccount.normalBalance}, skipping.`);
-        continue accountLoop;
-      } else {
-        await repo.addAccount(account.code, account.name, account.normalBalance);
-        results.push(`New account ${account.code} (${account.name}) has been created with normal balance ${account.normalBalance}.`);
+        if (existingAccount.normalBalance === account.normalBalance) {
+          try {
+            await repo.updateAccount(account.accountCode, {
+              name: account.name,
+              controlCode: account.controlAccountCode,
+              deactivate: account.deactivate,
+            });
+            const resultTexts: Array<string> = [];
+            if (typeof account.name === 'string' && existingAccount.name !== account.name) {
+              resultTexts.push(`the account's name has been updated from "${existingAccount.name}" to "${account.name}"`);
+            }
+            if (typeof account.controlAccountCode === 'number' && existingAccount.controlAccountCode !== account.controlAccountCode) {
+              resultTexts.push(`the account's control code has been updated from "${existingAccount.controlAccountCode === null ? 'None' : existingAccount.controlAccountCode}" to "${account.controlAccountCode}"`);
+            }
+            if (typeof account.deactivate === 'boolean' && existingAccount.isActive !== !account.deactivate) {
+              if (account.deactivate) {
+                resultTexts.push(`the account has been deactivated/closed. Final balance was ${formatCurrency(existingAccount.balance ?? 0, userConfig)}.`);
+              }
+              else {
+                resultTexts.push('the account has been re-activated/re-opened.');
+              }
+            }
+            if (resultTexts.length === 0) {
+              results.push(`account ${account.accountCode} "${account.name}" was found but no changes were made.`);
+            }
+            else {
+              results.push(`account ${account.accountCode} "${account.name}" has been updated: ${resultTexts.join('; ')}`);
+            }
+          }
+          catch (error) {
+            results.push(`error updating account ${account.accountCode} "${account.name}": ${(error as Error).message}`);
+          }
+        }
+        else {
+          results.push(`existing account ${account.accountCode} "${account.name}" was found but normal balance mismatch (existing: ${existingAccount.normalBalance}, provided: ${account.normalBalance}). No changes were made.`);
+        }
+      }
+      else {
+        try {
+          await repo.addAccount(account.accountCode, account.name, account.normalBalance);
+          // Set control account if provided
+          if (typeof account.controlAccountCode === 'number') {
+            await repo.updateAccount(account.accountCode, { controlCode: account.controlAccountCode });
+          }
+          results.push(`new account ${account.accountCode} "${account.name}" has been created with normal balance ${account.normalBalance}.`);
+        }
+        catch (error) {
+          results.push(`Error creating account ${account.accountCode} "${account.name}": ${(error as Error).message}`);
+        }
       }
     }
 
     return {
-      content: [{
-        type: 'text',
-        text: results.join('\n'),
-      }],
+      content: [{ type: 'text', text: `# Account Management Result\n- ${results.join('\n- ')}` }],
     };
   });
 }
 
-export function defineRenameAccountMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('renameAccount', {
-    title: 'Change an account name',
-    description: "Set an account's display name.",
-    inputSchema: { code: z.number(), name: z.string() },
-  }, async function (params) {
-    const existingAccount = await repo.getAccountByCode(params.code);
-    if (!existingAccount) {
-      return { content: [{ type: 'text', text: `Account with code ${params.code} does not exist.` }] };
-    }
-    try {
-      await repo.setAccountName(params.code, params.name);
-    }
-    catch (error) {
-      return { content: [{ type: 'text', text: `Error renaming account: ${(error as Error).message}` }] };
-    }
-    return { content: [{ type: 'text', text: `Account ${params.code} renamed from "${existingAccount.name}" to "${params.name}". Normal balance: ${existingAccount.normalBalance}.` }] };
-  });
-}
-
-export function defineSetControlAccountMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('setControlAccount', {
-    title: 'Set control account',
-    description: 'Control account determines the account hierarchy and reporting structure.',
+export function defineViewChartOfAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
+  server.registerTool('ViewChartOfAccounts', {
+    title: 'Get complete chart of accounts',
+    description: 'This tool will return complete information including code, name, balance, and normal balance for all accounts in a hierarchical structure.',
     inputSchema: {
-      accountCode: z.number(),
-      controlAccountCode: z.number(),
+      showInactive: z.boolean().optional().default(false).describe('If true, include inactive accounts in the chart of accounts. Default is false.'),
     },
   }, async function (params) {
-    const account = await repo.getAccountByCode(params.accountCode);
-    if (!account) {
-      return { content: [{ type: 'text', text: `Account with code ${params.accountCode} does not exist.` }] };
-    }
-    const controlAccount = await repo.getAccountByCode(params.controlAccountCode);
-    if (!controlAccount) {
-      return { content: [{ type: 'text', text: `Control account with code ${params.controlAccountCode} does not exist.` }] };
-    }
-    if (params.accountCode === params.controlAccountCode) {
-      return { content: [{ type: 'text', text: 'An account cannot be its own control account.' }] };
-    }
-    try {
-      await repo.setControlAccount(params.accountCode, params.controlAccountCode);
-    }
-    catch (error) {
-      return { content: [{ type: 'text', text: `Error setting control account: ${(error as Error)?.message}` }] };
-    }
-    return { content: [{ type: 'text', text: `Account ${params.accountCode} (${account.name}, normal balance: ${account.normalBalance}) control account set to ${params.controlAccountCode} (${controlAccount.name}, normal balance: ${controlAccount.normalBalance}).` }] };
-  });
-}
-
-export function defineGetHierarchicalChartOfAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getHierarchicalChartOfAccounts', {
-    title: 'Get hierarchical chart of accounts',
-    description: 'Return a hierarchical chart of accounts.',
-    inputSchema: {},
-  }, async function () {
     const userConfig = await repo.getUserConfig();
     const chartOfAccountToAsciiHierarchy = function (account: ChartOfAccount): AsciiHierarcy {
       return {
-        label: `${account.code} ${account.name} (Balance: ${formatCurrency(account.balance ?? 0, userConfig)}, Normal: ${account.normalBalance})`,
+        label: `account ${account.code} "${account.name}" — (balance: ${formatCurrency(account.balance ?? 0, userConfig)}, normal balance: ${account.normalBalance})`,
         children: account.children ? account.children.map(chartOfAccountToAsciiHierarchy) : [],
       };
     };
-    const roots = await repo.getHierarchicalChartOfAccounts();
-    const asciiHierarchyNode = {
-      label: 'Chart of Accounts',
+    const roots = await repo.ViewChartOfAccounts({ includeInactive: params.showInactive });
+    const asciiHierarchy = renderAsciiHierarchy({
+      label: '# Chart of Accounts',
       children: roots.map(chartOfAccountToAsciiHierarchy),
-    };
-    const asciiHierarchy = renderAsciiHierarchy(asciiHierarchyNode);
-    return { content: [{ type: 'text', text: asciiHierarchy }] };
-  });
-}
-
-export function defineGetManyAccountsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getManyAccounts', {
-    title: 'Get many accounts',
-    description: 'Fetch multiple accounts by their codes, names, tags, or account control code. The query is inclusive OR across the provided filters.',
-    inputSchema: {
-      codes: z.array(z.number()).optional(),
-      names: z.array(z.string()).optional(),
-      tags: z.array(z.string()).optional(),
-      controlAccountCodes: z.number().optional(),
-    },
-  }, async function (params) {
-    const userConfig = await repo.getUserConfig();
-    const accounts = await repo.getManyAccounts({
-      codes: params.codes,
-      names: params.names,
-      tags: params.tags,
-      controlAccountCodes: params.controlAccountCodes ? [params.controlAccountCodes] : undefined,
     });
-    if (accounts.length === 0) {
-      return { content: [{ type: 'text', text: 'No accounts found matching the provided filters.' }] };
-    }
-    const lines = accounts.map(a => `${a.code} ${a.name} (Balance: ${formatCurrency(a.balance ?? 0, userConfig)}, Normal: ${a.normalBalance})`);
-    return { content: [{ type: 'text', text: lines.join('\n') }] };
+    return {
+      content: [{ type: 'text', text: asciiHierarchy }],
+    };
   });
 }

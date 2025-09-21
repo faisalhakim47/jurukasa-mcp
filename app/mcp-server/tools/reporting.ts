@@ -4,18 +4,24 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
 export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getLatestTrialBalance', {
-    title: 'Get latest trial balance',
-    description: 'Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (yyyy-mm-dd HH:mm:ss).',
+  server.registerTool('ViewLatestTrialBalance', {
+    title: 'Get latest trial balance report',
+    description: 'Fetch the latest trial balance as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (yyyy-mm-dd HH:mm).',
     inputSchema: {
       fromDate: z.string().optional(),
     },
   }, async function (params) {
     const userConfig = await repo.getUserConfig();
-    const report = await repo.getLatestTrialBalance(params.fromDate);
+    const report = await repo.viewLatestTrialBalance(params.fromDate);
     if (!report) {
       return {
-        content: [{ type: 'text', text: 'No trial balance reports found.' }],
+        content: [{ type: 'text', text: 'No trial balance reports found. Please create accounts first using ManageManyAccounts, then generate a financial report using GenerateFinancialReport.' }],
+      };
+    }
+
+    if (report.lines.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'Trial balance report exists but no accounts were found. Please create accounts first using ManageManyAccounts to populate the trial balance.' }],
       };
     }
 
@@ -39,18 +45,30 @@ export function defineGetLatestTrialBalanceMCPTool(server: McpServer, repo: Acco
 }
 
 export function defineGetLatestBalanceSheetMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('getLatestBalanceSheet', {
-    title: 'Get latest balance sheet',
-    description: 'Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided. Date is in ISO format (yyyy-mm-dd HH:mm:ss).',
+  server.registerTool('ViewLatestBalanceSheet', {
+    title: 'Get latest balance sheet report',
+    description: 'Fetch the latest balance sheet as of a specific date, defaulting to the most recent if no date is provided.',
     inputSchema: {
-      fromDate: z.string().optional(),
+      fromDate: z.string().optional().describe('If provided, fetch the latest balance sheet report as of this date/time. Format is ISO (yyyy-mm-dd HH:mm).'),
     },
   }, async function (params) {
+    const formDate = params.fromDate ? new Date(params.fromDate) : null;
+    if (params.fromDate && (isNaN(formDate!.getTime()))) {
+      return {
+        content: [{ type: 'text', text: 'Invalid fromDate format. Please use ISO format (yyyy-mm-dd HH:mm).' }],
+      };
+    }
     const userConfig = await repo.getUserConfig();
-    const report = await repo.getLatestBalanceSheet(params.fromDate);
+    const report = await repo.viewLatestBalanceSheet(formDate.toISOString());
     if (!report) {
       return {
-        content: [{ type: 'text', text: 'No balance sheet reports found.' }],
+        content: [{ type: 'text', text: 'No balance sheet reports found. Please create accounts first using ManageManyAccounts, tag them for balance sheet reporting using SetManyAccountTags, then generate a financial report using GenerateFinancialReport.' }],
+      };
+    }
+
+    if (report.lines.length === 0) {
+      return {
+        content: [{ type: 'text', text: 'Balance sheet report exists but no balance sheet accounts were found. Please create accounts and tag them for balance sheet reporting using SetManyAccountTags (e.g., "Balance Sheet - Current Asset", "Balance Sheet - Equity").' }],
       };
     }
 
@@ -95,14 +113,13 @@ export function defineGetLatestBalanceSheetMCPTool(server: McpServer, repo: Acco
 }
 
 export function defineGenerateFinancialReportMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('generateFinancialReport', {
+  server.registerTool('GenerateFinancialReport', {
     title: 'Generate financial report',
     description: 'Generate Trial Balance and Balance Sheet snapshots for the current date/time.',
     inputSchema: {},
   }, async function () {
     const reportTime = Date.now();
-    const reportId = await repo.generateFinancialReport(reportTime);
-
+    const reportId = await repo.GenerateFinancialReport(reportTime);
     return {
       content: [{
         type: 'text',

@@ -166,7 +166,7 @@ export async function runAccountingRepositoryTestSuite(
         });
         await repo.postJournalEntry(entryId, now);
 
-        const reportId = await repo.generateFinancialReport(reportTime);
+        const reportId = await repo.GenerateFinancialReport(reportTime);
         strictEqual(typeof reportId, 'number');
 
         const tb = await repo.getTrialBalanceReport(reportTime);
@@ -205,19 +205,19 @@ export async function runAccountingRepositoryTestSuite(
         });
         await repo.postJournalEntry(entryId, now);
 
-        const reportId = await repo.generateFinancialReport(reportTime);
+        const reportId = await repo.GenerateFinancialReport(reportTime);
         strictEqual(typeof reportId, 'number');
 
-        // Test getLatestTrialBalance
-        const latestTb = await repo.getLatestTrialBalance();
+        // Test ViewLatestTrialBalance
+        const latestTb = await repo.viewLatestTrialBalance();
         strictEqual(latestTb?.reportTime, reportTime);
         const tbLineA = latestTb?.lines.find(l => l.accountCode === 2000);
         const tbLineB = latestTb?.lines.find(l => l.accountCode === 3000);
         strictEqual(typeof tbLineA, 'object');
         strictEqual(typeof tbLineB, 'object');
 
-        // Test getLatestBalanceSheet
-        const latestBs = await repo.getLatestBalanceSheet();
+        // Test ViewLatestBalanceSheet
+        const latestBs = await repo.viewLatestBalanceSheet();
         strictEqual(latestBs?.reportTime, reportTime);
         const bsLineA = latestBs?.lines.find(l => l.accountCode === 2000);
         const bsLineB = latestBs?.lines.find(l => l.accountCode === 3000);
@@ -226,18 +226,18 @@ export async function runAccountingRepositoryTestSuite(
 
         // Test with fromDate
         const futureDate = new Date(reportTime + 1000).toISOString();
-        const latestTbWithDate = await repo.getLatestTrialBalance(futureDate);
+        const latestTbWithDate = await repo.viewLatestTrialBalance(futureDate);
         strictEqual(latestTbWithDate?.reportTime, reportTime);
 
-        const latestBsWithDate = await repo.getLatestBalanceSheet(futureDate);
+        const latestBsWithDate = await repo.viewLatestBalanceSheet(futureDate);
         strictEqual(latestBsWithDate?.reportTime, reportTime);
 
         // Test with past date (should return null)
         const pastDate = new Date(reportTime - 1000).toISOString();
-        const noTb = await repo.getLatestTrialBalance(pastDate);
+        const noTb = await repo.viewLatestTrialBalance(pastDate);
         strictEqual(noTb, null);
 
-        const noBs = await repo.getLatestBalanceSheet(pastDate);
+        const noBs = await repo.viewLatestBalanceSheet(pastDate);
         strictEqual(noBs, null);
       });
     });
@@ -423,7 +423,7 @@ export async function runAccountingRepositoryTestSuite(
       });
     });
 
-    describe('deleteManyJournalEntryDrafts and reverseJournalEntry', function () {
+    describe('deleteManyJournalEntryDrafts and ReverseJournalEntry', function () {
       it('should delete multiple draft journal entries', async function () {
         // Create accounts
         await repo.addAccount(7000, 'Cash Test', 'debit');

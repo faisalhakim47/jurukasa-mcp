@@ -2,23 +2,35 @@ import { AccountingRepository } from '@app/data/accounting-repository.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import z from 'zod/v3';
 
-export function defineDraftJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('draftJournalEntry', {
-    title: 'Draft journal entry',
-    description: 'Create a draft journal entry with specified date, description, and lines. Returns the journal entry reference number. Date is in ISO format (yyyy-mm-dd HH:mm:ss). Optionally provide an idempotentKey to prevent duplicate entries.',
+export function defineRecordJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
+  server.registerTool('RecordJournalEntry', {
+    title: 'Record journal entry',
+    description: 'Record journal entry with specified date, description, and lines.',
     inputSchema: {
-      date: z.string(),
-      description: z.string(),
+      date: z.string().describe('date is in ISO format (yyyy-mm-dd HH:mm:ss)'),
+      description: z.string().optional(),
       lines: z.array(z.object({
         accountCode: z.number(),
         amount: z.number(),
         type: z.enum(['debit', 'credit']),
       })),
-      idempotentKey: z.string().optional(),
+      idempotentKey: z.string().optional().describe('provide optional idempotentKey to prevent duplicate entries'),
     },
   }, async function (params) {
     try {
       const entryTime = new Date(params.date).getTime();
+
+      if (isNaN(entryTime)) {
+        return { content: [{ type: 'text', text: 'Invalid date format. Please use ISO format (yyyy-mm-dd HH:mm:ss).' }] };
+      }
+
+      if (params.idempotentKey) {
+        const existingJournalRef = await repo.getExistingJournalEntryByIdempotentKey(params.idempotentKey);
+        if (existingJournalRef) {
+          return { content: [{ type: 'text', text: `Journal entry idempotency key already used by journal entry ref ${existingJournalRef}. No new entry created.` }] };
+        }
+      }
+
       const journalLines = params.lines.map(line => ({
         accountCode: line.accountCode,
         debit: line.type === 'debit' ? line.amount : 0,
@@ -32,129 +44,23 @@ export function defineDraftJournalEntryMCPTool(server: McpServer, repo: Accounti
         idempotentKey: params.idempotentKey,
       });
 
-      return {
-        content: [{
-          type: 'text',
-          text: `Draft journal entry created with ref ${journalEntryRef} for date ${params.date}.`,
-        }],
-      };
-    }
-    catch (error) {
-      return {
-        content: [{ type: 'text', text: `Error creating draft journal entry: ${(error as Error).message}` }],
-      };
-    }
-  });
-}
-
-export function defineUpdateJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('updateJournalEntry', {
-    title: 'Update journal entry',
-    description: 'Update an existing journal entry draft with new date, description, and/or lines. Date is in ISO format (yyyy-mm-dd HH:mm:ss). Optionally update the idempotentKey.',
-    inputSchema: {
-      journalEntryRef: z.number(),
-      date: z.string(),
-      description: z.string(),
-      lines: z.array(z.object({
-        accountCode: z.number(),
-        amount: z.number(),
-        type: z.enum(['debit', 'credit']),
-      })),
-      idempotentKey: z.string().optional(),
-    },
-  }, async function (params) {
-    try {
-      const entryTime = new Date(params.date).getTime();
-      const journalLines = params.lines.map(line => ({
-        accountCode: line.accountCode,
-        debit: line.type === 'debit' ? line.amount : 0,
-        credit: line.type === 'credit' ? line.amount : 0,
-      }));
-
-      await repo.updateJournalEntry(params.journalEntryRef, {
-        entryTime,
-        description: params.description,
-        lines: journalLines,
-        idempotentKey: params.idempotentKey,
-      });
+      await repo.postJournalEntry(journalEntryRef, entryTime);
 
       return {
         content: [{
           type: 'text',
-          text: `Journal entry ${params.journalEntryRef} updated successfully.`,
+          text: `Journal entry recorded with ref ${journalEntryRef} for date ${params.date}.`,
         }],
       };
     }
     catch (error) {
-      return {
-        content: [{ type: 'text', text: `Error updating journal entry: ${(error as Error).message}` }],
-      };
-    }
-  });
-}
-
-export function definePostJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('postJournalEntry', {
-    title: 'Post journal entry',
-    description: 'Post a draft journal entry to make it final. Optionally specify a post date (defaults to current date). Date is in ISO format (yyyy-mm-dd HH:mm:ss).',
-    inputSchema: {
-      journalEntryRef: z.number(),
-      date: z.string().optional(),
-    },
-  }, async function (params) {
-    try {
-      const postTime = params.date ? new Date(params.date).getTime() : Date.now();
-      await repo.postJournalEntry(params.journalEntryRef, postTime);
-
-      return {
-        content: [{
-          type: 'text',
-          text: `Journal entry ${params.journalEntryRef} posted successfully.`,
-        }],
-      };
-    }
-    catch (error) {
-      return {
-        content: [{ type: 'text', text: `Error posting journal entry: ${(error as Error).message}` }],
-      };
-    }
-  });
-}
-
-export function defineDeleteManyJournalEntryDraftsMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('deleteManyJournalEntryDrafts', {
-    title: 'Delete many journal entry drafts',
-    description: 'Delete multiple draft journal entries that have not been posted yet.',
-    inputSchema: {
-      journalEntryRefs: z.array(z.number()),
-    },
-  }, async function (params) {
-    if (params.journalEntryRefs.length === 0) {
-      return {
-        content: [{ type: 'text', text: 'No journal entry refs provided, nothing to delete.' }],
-      };
-    }
-
-    try {
-      await repo.deleteManyJournalEntryDrafts(params.journalEntryRefs);
-      const results = params.journalEntryRefs.map(ref => `Draft journal entry ${ref} deleted.`);
-      return {
-        content: [{
-          type: 'text',
-          text: results.join('\n'),
-        }],
-      };
-    }
-    catch (error) {
-      return {
-        content: [{ type: 'text', text: `Error deleting journal entry drafts: ${(error as Error).message}` }],
-      };
+      return { content: [{ type: 'text', text: `Error creating draft journal entry: ${(error as Error).message}` }] };
     }
   });
 }
 
 export function defineReverseJournalEntryMCPTool(server: McpServer, repo: AccountingRepository) {
-  server.registerTool('reverseJournalEntry', {
+  server.registerTool('ReverseJournalEntry', {
     title: 'Reverse journal entry',
     description: 'Create a reversal journal entry for a posted journal entry. The reversal will swap debits and credits of the original entry. Date is in ISO format (yyyy-mm-dd HH:mm:ss). Optionally provide an idempotentKey to prevent duplicate reversals.',
     inputSchema: {
@@ -166,24 +72,27 @@ export function defineReverseJournalEntryMCPTool(server: McpServer, repo: Accoun
   }, async function (params) {
     try {
       const reversalTime = new Date(params.date).getTime();
+
+      if (isNaN(reversalTime)) {
+        return { content: [{ type: 'text', text: 'Invalid date format. Please use ISO format (yyyy-mm-dd HH:mm:ss).' }] };
+      }
+
       const reversalRef = await repo.reverseJournalEntry(
-        params.journalEntryRef, 
-        reversalTime, 
+        params.journalEntryRef,
+        reversalTime,
         params.description,
         params.idempotentKey
       );
-      
+
       return {
         content: [{
           type: 'text',
-          text: `Reversal journal entry created with ref ${reversalRef} for original entry ${params.journalEntryRef}.`,
+          text: `Reversal journal entry recorded with ref ${reversalRef} for original entry ${params.journalEntryRef}.`,
         }],
       };
     }
     catch (error) {
-      return {
-        content: [{ type: 'text', text: `Error reversing journal entry: ${(error as Error).message}` }],
-      };
+      return { content: [{ type: 'text', text: `Error reversing journal entry: ${(error as Error).message}` }] };
     }
   });
 }

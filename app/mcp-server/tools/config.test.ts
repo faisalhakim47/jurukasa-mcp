@@ -45,10 +45,10 @@ suite('ConfigMCPTools', function () {
     await repo.close();
   });
 
-  describe('Tool: setConfig', function () {
+  describe('Tool: SetConfig', function () {
     it('should update business name', async function () {
       const result = await client.callTool({
-        name: 'setConfig',
+        name: 'SetConfig',
         arguments: {
           configs: [{
             key: 'Business Name',
@@ -67,7 +67,7 @@ suite('ConfigMCPTools', function () {
 
     it('should update currency code', async function () {
       const result = await client.callTool({
-        name: 'setConfig',
+        name: 'SetConfig',
         arguments: {
           configs: [{
             key: 'Currency Code',
@@ -86,7 +86,7 @@ suite('ConfigMCPTools', function () {
 
     it('should update fiscal year start month', async function () {
       const result = await client.callTool({
-        name: 'setConfig',
+        name: 'SetConfig',
         arguments: {
           configs: [{
             key: 'Fiscal Year Start Month',
@@ -102,7 +102,7 @@ suite('ConfigMCPTools', function () {
     it('should validate key at schema level', async function () {
       try {
         await client.callTool({
-          name: 'setConfig',
+          name: 'SetConfig',
           arguments: {
             configs: [{
               key: 'Invalid Key' as any,
@@ -118,7 +118,7 @@ suite('ConfigMCPTools', function () {
 
     it('should update multiple configurations', async function () {
       const result = await client.callTool({
-        name: 'setConfig',
+        name: 'SetConfig',
         arguments: {
           configs: [
             {
@@ -143,10 +143,10 @@ suite('ConfigMCPTools', function () {
     });
   });
 
-  describe('Tool: getConfig', function () {
+  describe('Tool: GetConfig', function () {
     it('should retrieve all configuration settings', async function () {
       const result = await client.callTool({
-        name: 'getConfig',
+        name: 'GetConfig',
       });
 
       strictEqual(result.content[0].type, 'text');

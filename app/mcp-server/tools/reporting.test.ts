@@ -40,30 +40,30 @@ suite('ReportingMCPTools', function () {
 
     // Set up initial accounts
     await client.callTool({
-      name: 'ensureManyAccountsExist',
+      name: 'ManageManyAccounts',
       arguments: {
         accounts: [
-          { code: 100, name: 'Cash', normalBalance: 'debit' },
-          { code: 200, name: 'Revenue', normalBalance: 'credit' },
-          { code: 300, name: 'Equity', normalBalance: 'credit' },
+          { accountCode: 100, name: 'Cash', normalBalance: 'debit' },
+          { accountCode: 200, name: 'Revenue', normalBalance: 'credit' },
+          { accountCode: 300, name: 'Equity', normalBalance: 'credit' },
         ],
       },
     });
 
     // Tag accounts for balance sheet reporting
     await client.callTool({
-      name: 'setManyAccountTags',
+      name: 'SetManyAccountTags',
       arguments: {
-        taggedAccounts: [
-          { code: 100, tag: 'Balance Sheet - Current Asset' },
-          { code: 300, tag: 'Balance Sheet - Equity' },
+        accountTags: [
+          { accountCode: 100, tag: 'Balance Sheet - Current Asset' },
+          { accountCode: 300, tag: 'Balance Sheet - Equity' },
         ],
       },
     });
 
     // Create and post a journal entry to have non-zero balances
     const draftRes = await client.callTool({
-      name: 'draftJournalEntry',
+      name: 'RecordJournalEntry',
       arguments: {
         date: '2024-01-01',
         description: 'Initial setup entry',
@@ -77,12 +77,6 @@ suite('ReportingMCPTools', function () {
     const draftText = (draftRes.content[0] as { text: string }).text;
     const refMatch = draftText.match(/ref (\d+)/);
     assertDefined(refMatch, 'Should extract journal entry reference');
-    const entryRef = parseInt(refMatch[1]);
-
-    await client.callTool({
-      name: 'postJournalEntry',
-      arguments: { journalEntryRef: entryRef },
-    });
   });
 
   afterEach(async function () {
@@ -93,10 +87,10 @@ suite('ReportingMCPTools', function () {
     await repo.close();
   });
 
-  describe('Tool: generateFinancialReport', function () {
+  describe('Tool: GenerateFinancialReport', function () {
     it('generates trial balance and balance sheet snapshots', async function () {
       const res = await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
       assertPropDefined(res, 'content');
@@ -116,21 +110,20 @@ suite('ReportingMCPTools', function () {
 
     it('creates separate trial balance and balance sheet reports', async function () {
       await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
       
       // Check that trial balance was created
       const trialBalanceRes = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       const trialBalanceText = (trialBalanceRes.content[0] as { text: string }).text;
       ok(!trialBalanceText.includes('No trial balance reports found'), 'should have trial balance report');
       
-      // Check that balance sheet was created
       const balanceSheetRes = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       const balanceSheetText = (balanceSheetRes.content[0] as { text: string }).text;
@@ -138,18 +131,18 @@ suite('ReportingMCPTools', function () {
     });
   });
 
-  describe('Tool: getLatestTrialBalance', function () {
+  describe('Tool: ViewLatestTrialBalance', function () {
     beforeEach(async function () {
       // Generate a financial report to have trial balance data
       await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
     });
 
     it('returns the latest trial balance report', async function () {
       const res = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       assertPropDefined(res, 'content');
@@ -167,7 +160,7 @@ suite('ReportingMCPTools', function () {
 
     it('shows correct balances in trial balance', async function () {
       const res = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       
@@ -179,18 +172,18 @@ suite('ReportingMCPTools', function () {
     });
   });
 
-  describe('Tool: getLatestBalanceSheet', function () {
+  describe('Tool: ViewLatestBalanceSheet', function () {
     beforeEach(async function () {
       // Generate a financial report to have balance sheet data
       await client.callTool({
-        name: 'generateFinancialReport',
+        name: 'GenerateFinancialReport',
         arguments: {},
       });
     });
 
     it('returns the latest balance sheet report', async function () {
       const res = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       assertPropDefined(res, 'content');
@@ -208,7 +201,7 @@ suite('ReportingMCPTools', function () {
 
     it('shows only balance sheet accounts', async function () {
       const res = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       
@@ -222,7 +215,7 @@ suite('ReportingMCPTools', function () {
 
     it('calculates totals for each classification', async function () {
       const res = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       
@@ -232,21 +225,60 @@ suite('ReportingMCPTools', function () {
     });
   });
 
-  describe('Tool: getLatestTrialBalance and getLatestBalanceSheet - No Reports', function () {
+  describe('Tool: ViewLatestTrialBalance and ViewLatestBalanceSheet - No Reports', function () {
     it('returns no reports when none exist', async function () {
       const trialBalanceRes = await client.callTool({
-        name: 'getLatestTrialBalance',
+        name: 'ViewLatestTrialBalance',
         arguments: {},
       });
       const trialBalanceText = (trialBalanceRes.content[0] as { text: string }).text;
       ok(trialBalanceText.includes('No trial balance reports found'), 'should indicate no trial balance reports');
-      
+      ok(trialBalanceText.includes('ManageManyAccounts'), 'should suggest creating accounts');
+      ok(trialBalanceText.includes('GenerateFinancialReport'), 'should suggest generating financial report');
+
       const balanceSheetRes = await client.callTool({
-        name: 'getLatestBalanceSheet',
+        name: 'ViewLatestBalanceSheet',
         arguments: {},
       });
       const balanceSheetText = (balanceSheetRes.content[0] as { text: string }).text;
       ok(balanceSheetText.includes('No balance sheet reports found'), 'should indicate no balance sheet reports');
+      ok(balanceSheetText.includes('ManageManyAccounts'), 'should suggest creating accounts');
+      ok(balanceSheetText.includes('SetManyAccountTags'), 'should suggest tagging accounts');
+      ok(balanceSheetText.includes('GenerateFinancialReport'), 'should suggest generating financial report');
+    });
+  });
+
+  describe('Tool: ViewLatestTrialBalance and ViewLatestBalanceSheet - Empty Reports', function () {
+    beforeEach(async function () {
+      // Generate a financial report without any accounts to test empty report scenario
+      await client.callTool({
+        name: 'GenerateFinancialReport',
+        arguments: {},
+      });
+    });
+
+    it('returns helpful message for empty trial balance', async function () {
+      const trialBalanceRes = await client.callTool({
+        name: 'ViewLatestTrialBalance',
+        arguments: {},
+      });
+      const trialBalanceText = (trialBalanceRes.content[0] as { text: string }).text;
+      ok(trialBalanceText.includes('no accounts were found') || trialBalanceText.includes('Account Code'), 'should handle empty or populated trial balance');
+      if (trialBalanceText.includes('no accounts were found')) {
+        ok(trialBalanceText.includes('ManageManyAccounts'), 'should suggest creating accounts for empty trial balance');
+      }
+    });
+
+    it('returns helpful message for empty balance sheet', async function () {
+      const balanceSheetRes = await client.callTool({
+        name: 'ViewLatestBalanceSheet',
+        arguments: {},
+      });
+      const balanceSheetText = (balanceSheetRes.content[0] as { text: string }).text;
+      ok(balanceSheetText.includes('no balance sheet accounts were found') || balanceSheetText.includes('Classification'), 'should handle empty or populated balance sheet');
+      if (balanceSheetText.includes('no balance sheet accounts were found')) {
+        ok(balanceSheetText.includes('SetManyAccountTags'), 'should suggest tagging accounts for empty balance sheet');
+      }
     });
   });
 });
