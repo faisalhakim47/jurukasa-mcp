@@ -25,7 +25,7 @@ export async function runAccountingRepositoryTestSuite(
         await repo.addAccount(1000, 'Cash', 'debit');
         const addedAccount = await repo.getAccountByCode(1000);
         assertDefined(addedAccount);
-        equal(addedAccount.code, 1000);
+        equal(addedAccount.accountCode, 1000);
         equal(addedAccount.name, 'Cash');
         equal(addedAccount.normalBalance, 'debit');
       });
@@ -43,7 +43,7 @@ export async function runAccountingRepositoryTestSuite(
         strictEqual(a?.name, 'New Name');
 
         // verify control account via raw SQL helper
-        const rows = await repo.sqlQuery('SELECT control_account_code as c FROM account WHERE code = ?', [1100]);
+        const rows = await repo.sqlQuery('SELECT control_account_code as c FROM accounts WHERE account_code = ?', [1100]);
         strictEqual((rows[0] as any).c, 1200);
       });
 
@@ -56,7 +56,7 @@ export async function runAccountingRepositoryTestSuite(
         await repo.setAccountTag(1300, 'Asset');
         const tagged = await repo.getAccountsByTag('Asset', 0, 10);
         strictEqual(tagged.length, 1);
-        strictEqual(tagged[0].code, 1300);
+        strictEqual(tagged[0].accountCode, 1300);
 
         await repo.unsetAccountTag(1300, 'Asset');
         const afterUnset = await repo.getAccountsByTag('Asset', 0, 10);
@@ -138,7 +138,7 @@ export async function runAccountingRepositoryTestSuite(
         strictEqual(revenueC?.balance, 75); // should have the updated amount
 
         // verify the journal entry details via raw SQL
-        const entryRows = await repo.sqlQuery('SELECT entry_time, note FROM journal_entry WHERE ref = ?', [entryId]);
+        const entryRows = await repo.sqlQuery('SELECT entry_time, note FROM journal_entries WHERE ref = ?', [entryId]);
         strictEqual(entryRows.length, 1);
         const entry = entryRows[0] as any;
         strictEqual(entry.entry_time, updatedTime);
@@ -391,35 +391,35 @@ export async function runAccountingRepositoryTestSuite(
         await repo.setControlAccount(5000, 6000);
 
         // filter by codes
-        let res = await repo.getManyAccounts({ codes: [4000] });
+        let res = await repo.getManyAccounts({ accountCodes: [4000] });
         strictEqual(res.length, 1);
-        strictEqual(res[0].code, 4000);
+        strictEqual(res[0].accountCode, 4000);
 
         // filter by names
         res = await repo.getManyAccounts({ names: ['Receivable'] });
         strictEqual(res.length, 1);
-        strictEqual(res[0].code, 5000);
+        strictEqual(res[0].accountCode, 5000);
 
         // filter by tags
         res = await repo.getManyAccounts({ tags: ['Asset'] });
         strictEqual(res.length, 1);
-        strictEqual(res[0].code, 4000);
+        strictEqual(res[0].accountCode, 4000);
 
         // filter by control account codes (should return children)
         res = await repo.getManyAccounts({ controlAccountCodes: [6000] });
         strictEqual(res.length, 1);
-        strictEqual(res[0].code, 5000);
+        strictEqual(res[0].accountCode, 5000);
 
         // inclusive OR across filters: even if codes don't match, tag should match
-        res = await repo.getManyAccounts({ codes: [9999], tags: ['Equity'] });
-        strictEqual(res.findIndex(r => r.code === 6000) !== -1, true);
+        res = await repo.getManyAccounts({ accountCodes: [9999], tags: ['Equity'] });
+        strictEqual(res.findIndex(r => r.accountCode === 6000) !== -1, true);
 
         // no filters should return all accounts
         res = await repo.getManyAccounts({});
         strictEqual(res.length, 3);
-        strictEqual(res.findIndex(r => r.code === 4000) !== -1, true);
-        strictEqual(res.findIndex(r => r.code === 5000) !== -1, true);
-        strictEqual(res.findIndex(r => r.code === 6000) !== -1, true);
+        strictEqual(res.findIndex(r => r.accountCode === 4000) !== -1, true);
+        strictEqual(res.findIndex(r => r.accountCode === 5000) !== -1, true);
+        strictEqual(res.findIndex(r => r.accountCode === 6000) !== -1, true);
       });
     });
 
@@ -452,7 +452,7 @@ export async function runAccountingRepositoryTestSuite(
         await repo.deleteManyJournalEntryDrafts([ref1, ref2]);
 
         // Verify they are deleted by checking if they still exist in the database
-        const remainingEntries = await repo.rawSql('SELECT ref FROM journal_entry WHERE ref IN (?, ?)', [ref1, ref2]);
+        const remainingEntries = await repo.rawSql('SELECT ref FROM journal_entries WHERE ref IN (?, ?)', [ref1, ref2]);
         strictEqual(remainingEntries.length, 0, 'Journal entries should be deleted');
       });
 

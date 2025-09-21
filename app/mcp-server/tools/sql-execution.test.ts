@@ -64,7 +64,7 @@ suite('SqlExecutionMCPTool', function () {
       const res = await client.callTool({
         name: 'ExecuteSqlQuery',
         arguments: {
-          query: 'SELECT code, name, normal_balance FROM account ORDER BY code',
+          query: 'SELECT account_code, name, normal_balance FROM accounts ORDER BY account_code',
         },
       });
       assertPropDefined(res, 'content');
@@ -82,7 +82,7 @@ suite('SqlExecutionMCPTool', function () {
       const res = await client.callTool({
         name: 'ExecuteSqlQuery',
         arguments: {
-          query: 'SELECT code, name FROM account WHERE code = ?',
+          query: 'SELECT account_code, name FROM accounts WHERE account_code = ?',
           params: [100],
         },
       });
@@ -100,7 +100,7 @@ suite('SqlExecutionMCPTool', function () {
       const res = await client.callTool({
         name: 'ExecuteSqlQuery',
         arguments: {
-          query: 'SELECT * FROM account WHERE code = 999',
+          query: 'SELECT * FROM accounts WHERE account_code = 999',
         },
       });
       assertPropDefined(res, 'content');
@@ -130,7 +130,7 @@ suite('SqlExecutionMCPTool', function () {
       const res = await client.callTool({
         name: 'ExecuteSqlQuery',
         arguments: {
-          query: 'SELECT COUNT(*) as account_count FROM account',
+          query: 'SELECT COUNT(*) as account_count FROM accounts',
         },
       });
       assertPropDefined(res, 'content');
@@ -159,10 +159,10 @@ suite('SqlExecutionMCPTool', function () {
         name: 'ExecuteSqlQuery',
         arguments: {
           query: `
-            SELECT a.code, a.name, at.tag 
-            FROM account a 
-            LEFT JOIN account_tag at ON a.code = at.account_code 
-            ORDER BY a.code
+            SELECT a.account_code, a.name, at.tag
+            FROM accounts a
+            LEFT JOIN account_tags at ON a.account_code = at.account_code
+            ORDER BY a.account_code
           `,
         },
       });

@@ -82,7 +82,7 @@ suite('AccountTagsMCPTools', function () {
       const verifyRes = await client.callTool({
         name: 'ExecuteSqlQuery',
         arguments: {
-          query: 'SELECT account_code, tag FROM account_tag WHERE account_code IN (100, 200) ORDER BY account_code, tag',
+          query: 'SELECT account_code, tag FROM account_tags WHERE account_code IN (100, 200) ORDER BY account_code, tag',
         },
       });
       const verifyText = (verifyRes.content[0] as { text: string }).text;
@@ -158,7 +158,7 @@ suite('AccountTagsMCPTools', function () {
       const verifyRes = await client.callTool({
         name: 'ExecuteSqlQuery',
         arguments: {
-          query: 'SELECT account_code, tag FROM account_tag WHERE account_code IN (100, 200) ORDER BY account_code, tag',
+          query: 'SELECT account_code, tag FROM account_tags WHERE account_code IN (100, 200) ORDER BY account_code, tag',
         },
       });
       const verifyText = (verifyRes.content[0] as { text: string }).text;

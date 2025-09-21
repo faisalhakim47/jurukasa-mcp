@@ -145,6 +145,52 @@ suite('JournalEntriesMCPTools', function () {
       // Empty lines should still create an entry, but let's check what actually gets returned
       ok(responseText.includes('Journal entry recorded with ref') || responseText.includes('Error'), 'should handle empty lines gracefully');
     });
+
+    it('returns user-friendly error for non-existent account codes', async function () {
+      const res = await client.callTool({
+        name: 'RecordJournalEntry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Entry with non-existent accounts',
+          lines: [
+            { accountCode: 999, amount: 500, type: 'debit' },
+            { accountCode: 998, amount: 300, type: 'credit' },
+            { accountCode: 200, amount: 200, type: 'credit' }, // This one exists
+          ],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Cannot record journal entry'), 'should indicate entry cannot be recorded');
+      ok(responseText.includes('do not exist'), 'should mention accounts do not exist');
+      ok(responseText.includes('999') && responseText.includes('998'), 'should list the missing account codes');
+      ok(responseText.includes('account management tools'), 'should suggest creating accounts first');
+    });
+
+    it('returns user-friendly error for single non-existent account code', async function () {
+      const res = await client.callTool({
+        name: 'RecordJournalEntry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Entry with one non-existent account',
+          lines: [
+            { accountCode: 100, amount: 500, type: 'debit' }, // This one exists
+            { accountCode: 999, amount: 500, type: 'credit' }, // This one doesn't
+          ],
+        },
+      });
+      assertPropDefined(res, 'content');
+      assertArray(res.content);
+      ok(res.content.length > 0, 'tool should return content');
+
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Cannot record journal entry'), 'should indicate entry cannot be recorded');
+      ok(responseText.includes('999'), 'should list the missing account code');
+      ok(!responseText.includes('100'), 'should not list existing account codes');
+    });
   });
 
   describe('Tool: ReverseJournalEntry', function () {
@@ -228,6 +274,39 @@ suite('JournalEntriesMCPTools', function () {
       ok(secondText.includes('Error reversing journal entry') || secondText.includes('idempotency key already used') || secondText.includes('Reversal journal entry recorded'), 'should handle duplicate reversal key');
     });
 
+    it('returns user-friendly error for duplicate idempotent key', async function () {
+      const idempotentKey = 'duplicate-key-test';
+
+      // First, create a different journal entry with the same idempotent key
+      await client.callTool({
+        name: 'RecordJournalEntry',
+        arguments: {
+          date: '2024-01-01',
+          description: 'Entry using the key first',
+          lines: [
+            { accountCode: 100, amount: 100, type: 'debit' },
+            { accountCode: 200, amount: 100, type: 'credit' },
+          ],
+          idempotentKey,
+        },
+      });
+
+      // Now try to use the same key for a reversal
+      const res = await client.callTool({
+        name: 'ReverseJournalEntry',
+        arguments: {
+          journalEntryRef,
+          date: '2024-01-02',
+          description: 'Reversal with duplicate key',
+          idempotentKey,
+        },
+      });
+
+      const responseText = (res.content[0] as { text: string }).text;
+      ok(responseText.includes('Reversal idempotency key already used'), 'should detect duplicate idempotent key for reversal');
+      ok(responseText.includes('No new reversal created'), 'should indicate no new reversal was created');
+    });
+
     it('fails to reverse non-existent entry', async function () {
       const nonExistentRef = 99999;
 
@@ -244,7 +323,7 @@ suite('JournalEntriesMCPTools', function () {
       ok(res.content.length > 0, 'tool should return content');
 
       const responseText = (res.content[0] as { text: string }).text;
-      ok(responseText.includes('Error reversing journal entry'), 'should indicate error');
+      ok(responseText.includes('Cannot reverse journal entry'), 'should indicate error');
     });
   });
 });

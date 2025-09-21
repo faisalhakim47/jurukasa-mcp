@@ -31,6 +31,27 @@ export function defineRecordJournalEntryMCPTool(server: McpServer, repo: Account
         }
       }
 
+      // Validate that all account codes exist
+      const accountCodes = params.lines.map(line => line.accountCode);
+      const uniqueAccountCodes = [...new Set(accountCodes)];
+      
+      if (uniqueAccountCodes.length > 0) {
+        const existingAccounts = await repo.getManyAccountsByCodes(uniqueAccountCodes);
+        const existingAccountCodes = new Set(existingAccounts.map(account => account.accountCode));
+        
+        const missingAccountCodes = uniqueAccountCodes.filter(code => !existingAccountCodes.has(code));
+        
+        if (missingAccountCodes.length > 0) {
+          const missingCodesText = missingAccountCodes.join(', ');
+          return { 
+            content: [{ 
+              type: 'text', 
+              text: `Cannot record journal entry. The following account codes do not exist: ${missingCodesText}. Please create these accounts first using the account management tools.` 
+            }] 
+          };
+        }
+      }
+
       const journalLines = params.lines.map(line => ({
         accountCode: line.accountCode,
         debit: line.type === 'debit' ? line.amount : 0,
@@ -77,6 +98,14 @@ export function defineReverseJournalEntryMCPTool(server: McpServer, repo: Accoun
         return { content: [{ type: 'text', text: 'Invalid date format. Please use ISO format (yyyy-mm-dd HH:mm:ss).' }] };
       }
 
+      // Check if idempotent key already exists to provide clearer error message
+      if (params.idempotentKey) {
+        const existingJournalRef = await repo.getExistingJournalEntryByIdempotentKey(params.idempotentKey);
+        if (existingJournalRef) {
+          return { content: [{ type: 'text', text: `Reversal idempotency key already used by journal entry ref ${existingJournalRef}. No new reversal created.` }] };
+        }
+      }
+
       const reversalRef = await repo.reverseJournalEntry(
         params.journalEntryRef,
         reversalTime,
@@ -92,7 +121,14 @@ export function defineReverseJournalEntryMCPTool(server: McpServer, repo: Accoun
       };
     }
     catch (error) {
-      return { content: [{ type: 'text', text: `Error reversing journal entry: ${(error as Error).message}` }] };
+      const errorMessage = (error as Error).message;
+      if (errorMessage.includes('not found') || errorMessage.includes('not posted')) {
+        return { content: [{ type: 'text', text: `Cannot reverse journal entry: ${errorMessage}` }] };
+      } else if (errorMessage.includes('FOREIGN KEY')) {
+        return { content: [{ type: 'text', text: `Cannot reverse journal entry ${params.journalEntryRef}. One or more account codes from the original entry no longer exist. This may indicate accounts were deleted after the original entry was posted.` }] };
+      } else {
+        return { content: [{ type: 'text', text: `Error reversing journal entry: ${errorMessage}` }] };
+      }
     }
   });
 }

@@ -146,9 +146,9 @@ suite('AccountManagementMCPTools', function () {
       ok(responseText.includes('control code has been updated from "None" to "1000"'), 'should update control account');
 
       // Verify control accounts were set using SQL query to bypass any filtering
-      const controlAccountResults = await repo.sqlQuery('SELECT code, control_account_code FROM account WHERE code IN (100, 400)', []);
-      const account100Result = controlAccountResults.find((row: any) => row.code === 100);
-      const account400Result = controlAccountResults.find((row: any) => row.code === 400);
+      const controlAccountResults = await repo.sqlQuery('SELECT account_code, control_account_code FROM accounts WHERE account_code IN (100, 400)', []);
+      const account100Result = controlAccountResults.find((row: any) => row.account_code === 100);
+      const account400Result = controlAccountResults.find((row: any) => row.account_code === 400);
       equal((account100Result as any)?.control_account_code, 1000);
       equal((account400Result as any)?.control_account_code, 1000);
     });
@@ -179,7 +179,7 @@ suite('AccountManagementMCPTools', function () {
       ok(responseText.includes('Final balance was $0.00'), 'should show zero balance');
 
       // Verify account was deactivated - need to use SQL query since getAccountByCode only returns active accounts
-      const deactivatedAccounts = await repo.sqlQuery('SELECT is_active FROM account WHERE code = ?', [500]);
+      const deactivatedAccounts = await repo.sqlQuery('SELECT is_active FROM accounts WHERE account_code = ?', [500]);
       equal((deactivatedAccounts[0] as any).is_active, 0);
     });
 
